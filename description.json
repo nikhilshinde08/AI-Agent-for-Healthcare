@@ -1,0 +1,311 @@
+{
+  "tables": [
+    {
+      "name": "patients",
+      "description": "Holds the list of patients’ details with personal information like SSN, PATIENT_ID, name, birthdate, etc.",
+      "columns": [
+        { "name": "PATIENT_ID", "type": "string", "description": "Unique ID of each patient." },
+        { "name": "BIRTHDATE", "type": "date", "description": "Patient’s birth date." },
+        { "name": "DEATHDATE", "type": "date", "description": "Patient's death date." },
+        { "name": "SSN", "type": "string", "description": "Unique Social Security Number for each person." },
+        { "name": "DRIVERS", "type": "string", "description": "Driving license number of each person." },
+        { "name": "PASSPORT", "type": "string", "description": "Passport number of each person." },
+        { "name": "PREFIX", "type": "string", "description": "Prefix (Mr. / Mrs. / Miss, etc.)." },
+        { "name": "FIRST", "type": "string", "description": "Patient’s first name." },
+        { "name": "LAST", "type": "string", "description": "Patient's last name." },
+        { "name": "SUFFIX", "type": "string", "description": "Degree or reputation suffix." },
+        { "name": "MAIDEN", "type": "string", "description": "Maiden name for applicable persons." },
+        { "name": "MARTIAL", "type": "string", "description": "Marital status (M or S)." },
+        { "name": "RACE", "type": "string", "description": "Patient’s race." },
+        { "name": "ETHINICITY", "type": "string", "description": "Patient’s ethnicity." },
+        { "name": "GENDER", "type": "string", "description": "Patient’s gender (M or F)." },
+        { "name": "BIRTHPLACE", "type": "string", "description": "Birthplace of the patient." },
+        { "name": "ADDRESS", "type": "string", "description": "Current address." },
+        { "name": "CITY", "type": "string", "description": "Current city." },
+        { "name": "STATE", "type": "string", "description": "Current state." },
+        { "name": "COUNTY", "type": "string", "description": "Current county." },
+        { "name": "ZIP", "type": "string", "description": "Zip code of residence." },
+        { "name": "LAT", "type": "float", "description": "Latitude of patient’s location." },
+        { "name": "LON", "type": "float", "description": "Longitude of patient’s location." },
+        { "name": "HEALTHCARE_EXPENSES", "type": "float", "description": "Total clinical expenses incurred by the patient." },
+        { "name": "HEALTHCARE_COVERAGE", "type": "float", "description": "Total insurance coverage taken by the patient." }
+      ],
+      "identification_fields": ["PATIENT_ID", "SSN", "DRIVERS", "PASSPORT"],
+      "date_fields": ["BIRTHDATE", "DEATHDATE"]
+    },
+    {
+      "name": "encounters",
+      "description": "Holds the details of the patient’s diagnosis (SNOMED code) with its description along with the encounter class (admission class) of each patient.",
+      "columns": [
+        { "name": "ENCOUNTER_ID", "type": "string", "description": "Primary key for the table; unique for each encounter." },
+        { "name": "START", "type": "date", "description": "Start date of the encounter." },
+        { "name": "STOP", "type": "date", "description": "Stop date of the encounter." },
+        { "name": "PATIENT_ID", "type": "string", "description": "Patient ID (refers to patients)." },
+        { "name": "ORGANIZATION_ID", "type": "string", "description": "Organization/hospital location." },
+        { "name": "PROVIDER_ID", "type": "string", "description": "Physician (refers to providers)." },
+        { "name": "PAYER_ID", "type": "string", "description": "Patient’s payer details (refers to payers)." },
+        { "name": "ENCOUNTERCLASS", "type": "string", "description": "Admission class (e.g., inpatient, outpatient, emergency)." },
+        { "name": "ENCOUNTER_CODE", "type": "string", "description": "SNOMED code for the primary reason for visit." },
+        { "name": "ENCOUNTER_DESCRIPTION", "type": "string", "description": "Description of the SNOMED code." },
+        { "name": "BASE_ENCOUNTER_COST", "type": "float", "description": "Base cost amount." },
+        { "name": "TOTAL_CLAIM_COST", "type": "float", "description": "Total claim cost for the visit." },
+        { "name": "PAYER_COVERAGE", "type": "float", "description": "Amount covered by payer." },
+        { "name": "REASONCODE", "type": "string", "description": "Reason SNOMED code found by provider." },
+        { "name": "REASONDESCRIPTION", "type": "string", "description": "Description of the reason code." }
+      ],
+      "identification_fields": ["ENCOUNTER_ID", "PATIENT_ID", "ENCOUNTER_CODE", "REASONCODE"],
+      "date_fields": ["START", "STOP"]
+    },
+    {
+      "name": "allergies",
+      "description": "Holds a list of allergies against the patients.",
+      "columns": [
+        { "name": "START", "type": "date", "description": "Start date of the allergy." },
+        { "name": "STOP", "type": "date", "description": "Stop date of the allergy." },
+        { "name": "PATIENT_ID", "type": "string", "description": "Patient ID (refers to patients)." },
+        { "name": "ENCOUNTER_ID", "type": "string", "description": "Encounter ID (refers to encounters)." },
+        { "name": "ALLERGY_CODE", "type": "string", "description": "Unique code of allergy (standardized)." },
+        { "name": "ALLERGY_DESCRIPTION", "type": "string", "description": "Description of the allergy." }
+      ],
+      "identification_fields": ["ENCOUNTER_ID", "PATIENT_ID", "ALLERGY_CODE"],
+      "date_fields": ["START", "STOP"]
+    },
+    {
+      "name": "careplans",
+      "description": "Holds records for patient care plans handled by nurses.",
+      "columns": [
+        { "name": "CAREPLAN_ID", "type": "string", "description": "Unique key for each care plan record." },
+        { "name": "START", "type": "date", "description": "Start date of the care plan." },
+        { "name": "STOP", "type": "date", "description": "Stop date of the care plan." },
+        { "name": "PATIENT_ID", "type": "string", "description": "Patient ID (refers to patients)." },
+        { "name": "ENCOUNTER_ID", "type": "string", "description": "Encounter ID (refers to encounters)." },
+        { "name": "CAREPLAN_CODE", "type": "string", "description": "SNOMED code." },
+        { "name": "CAREPLAN_DESCRIPTION", "type": "string", "description": "Description of the code." },
+        { "name": "REASONCODE", "type": "string", "description": "SNOMED code for reason." },
+        { "name": "REASONDESCRIPTION", "type": "string", "description": "Description of the reason code." }
+      ],
+      "identification_fields": ["CAREPLAN_ID", "ENCOUNTER_ID", "PATIENT_ID", "CAREPLAN_CODE"],
+      "date_fields": ["START", "STOP"]
+    },
+    {
+      "name": "conditions",
+      "description": "Holds a list of records for patient conditions (marked with SNOMED code).",
+      "columns": [
+        { "name": "START", "type": "date", "description": "Start date of the condition." },
+        { "name": "STOP", "type": "date", "description": "Stop date of the condition." },
+        { "name": "PATIENT_ID", "type": "string", "description": "Patient ID (refers to patients)." },
+        { "name": "ENCOUNTER_ID", "type": "string", "description": "Encounter ID (refers to encounters)." },
+        { "name": "CONDITION_CODE", "type": "string", "description": "SNOMED code." },
+        { "name": "CONDITION_DESCRIPTION", "type": "string", "description": "Description of the code." }
+      ],
+      "identification_fields": ["ENCOUNTER_ID", "PATIENT_ID", "CONDITION_CODE"],
+      "date_fields": ["START", "STOP"]
+    },
+    {
+      "name": "devices",
+      "description": "Holds the list of patients who have undergone any external device implant.",
+      "columns": [
+        { "name": "START", "type": "date", "description": "Start date of device implant." },
+        { "name": "STOP", "type": "date", "description": "Stop date of device implant." },
+        { "name": "PATIENT_ID", "type": "string", "description": "Patient ID (refers to patients)." },
+        { "name": "ENCOUNTER_ID", "type": "string", "description": "Encounter ID (refers to encounters)." },
+        { "name": "DEVICE_CODE", "type": "string", "description": "SNOMED code." },
+        { "name": "DEVICE_DESCRIPTION", "type": "string", "description": "Description of the code." },
+        { "name": "UDI", "type": "string", "description": "Unique device identification number." }
+      ],
+      "identification_fields": ["ENCOUNTER_ID", "PATIENT_ID", "DEVICE_CODE"],
+      "date_fields": ["START", "STOP"]
+    },
+    {
+      "name": "imaging_studies",
+      "description": "Holds the list of patients who underwent radiology procedures.",
+      "columns": [
+        { "name": "IMAGING_STUDIES_ID", "type": "string", "description": "Unique key for each imaging study." },
+        { "name": "DATE", "type": "date", "description": "Date of the scan." },
+        { "name": "PATIENT_ID", "type": "string", "description": "Patient ID (refers to patients)." },
+        { "name": "ENCOUNTER_ID", "type": "string", "description": "Encounter ID (refers to encounters)." },
+        { "name": "BODYSITE_CODE", "type": "string", "description": "Body site code scanned." },
+        { "name": "BODYSITE_DESCRIPTION", "type": "string", "description": "Description of the body site." },
+        { "name": "MODALITY_CODE", "type": "string", "description": "Modality code (e.g., XRAY, CT, Ultrasound)." },
+        { "name": "MODALITY_DESCRIPTION", "type": "string", "description": "Description of the modality." },
+        { "name": "SOP_CODE", "type": "string", "description": "SOP class UID (Service Object Pair class unique identifier)." },
+        { "name": "SOP_DESCRIPTION", "type": "string", "description": "Description of SOP code." }
+      ],
+      "identification_fields": ["IMAGING_STUDIES_ID", "ENCOUNTER_ID", "PATIENT_ID"],
+      "date_fields": ["DATE"]
+    },
+    {
+      "name": "immunizations",
+      "description": "Holds the list of patients who received vaccinations.",
+      "columns": [
+        { "name": "DATE", "type": "date", "description": "Date of vaccination." },
+        { "name": "PATIENT_ID", "type": "string", "description": "Patient ID (refers to patients)." },
+        { "name": "ENCOUNTER_ID", "type": "string", "description": "Encounter ID (refers to encounters)." },
+        { "name": "IMMUNIZATION_CODE", "type": "string", "description": "CVX code of immunization." },
+        { "name": "IMMUNIZATION_DESCRIPTION", "type": "string", "description": "Description of the vaccine." },
+        { "name": "BASE_COST", "type": "float", "description": "Base cost of the vaccine." }
+      ],
+      "identification_fields": ["ENCOUNTER_ID", "PATIENT_ID"],
+      "date_fields": ["DATE"]
+    },
+    {
+      "name": "medications",
+      "description": "Holds the list of medications prescribed or taken by patients.",
+      "columns": [
+        { "name": "START", "type": "date", "description": "Start date of medication." },
+        { "name": "STOP", "type": "date", "description": "Stop date of medication." },
+        { "name": "PATIENT_ID", "type": "string", "description": "Patient ID (refers to patients)." },
+        { "name": "PAYER_ID", "type": "string", "description": "Payer (refers to payers)." },
+        { "name": "ENCOUNTER_ID", "type": "string", "description": "Encounter ID (refers to encounters)." },
+        { "name": "MEDICATION_CODE", "type": "string", "description": "Medication code (NDC)." },
+        { "name": "MEDICATION_DESCRIPTION", "type": "string", "description": "Description of the medication." },
+        { "name": "BASE_COST", "type": "float", "description": "Base cost of the medication." },
+        { "name": "PAYER_COVERAGE", "type": "float", "description": "Insurance coverage amount." },
+        { "name": "DISPENSES", "type": "int", "description": "Total quantity dispensed." },
+        { "name": "TOTALCOST", "type": "float", "description": "Total amount charged." },
+        { "name": "REASONCODE", "type": "string", "description": "Reason or diagnosis code for medication." },
+        { "name": "REASONDESCRIPTION", "type": "string", "description": "Description of the diagnosis." }
+      ],
+      "identification_fields": ["ENCOUNTER_ID", "PATIENT_ID"],
+      "date_fields": ["START", "STOP"]
+    },
+    {
+      "name": "observations",
+      "description": "Holds patient vitals (e.g., temperature, heart rate, height, weight).",
+      "columns": [
+        { "name": "DATE", "type": "date", "description": "Date of the observation." },
+        { "name": "PATIENT_ID", "type": "string", "description": "Patient ID (refers to patients)." },
+        { "name": "ENCOUNTER_ID", "type": "string", "description": "Encounter ID (refers to encounters)." },
+        { "name": "OBSERVATION_CODE", "type": "string", "description": "LOINC code of the vital." },
+        { "name": "OBSERVATION_DESCRIPTION", "type": "string", "description": "Description of the code." },
+        { "name": "VALUE", "type": "string", "description": "Value of the observation (e.g., heart rate, temperature)." },
+        { "name": "UNITS", "type": "string", "description": "Units of the value." },
+        { "name": "TYPE", "type": "string", "description": "Data type (e.g., text, numeric)." }
+      ],
+      "identification_fields": ["ENCOUNTER_ID", "PATIENT_ID"],
+      "date_fields": ["DATE"]
+    },
+    {
+      "name": "providers",
+      "description": "Holds provider details like name, organization, specialty, address, etc.",
+      "columns": [
+        { "name": "PROVIDER_ID", "type": "string", "description": "Unique key for the provider." },
+        { "name": "ORGANIZATION_ID", "type": "string", "description": "Linked organization (refers to organizations)." },
+        { "name": "NAME", "type": "string", "description": "Provider’s name." },
+        { "name": "GENDER", "type": "string", "description": "Gender of the provider." },
+        { "name": "SPECIALITY", "type": "string", "description": "Provider’s specialty department." },
+        { "name": "ADDRESS", "type": "string", "description": "Address of the provider." },
+        { "name": "CITY", "type": "string", "description": "City of residence." },
+        { "name": "STATE", "type": "string", "description": "State of residence." },
+        { "name": "ZIP", "type": "string", "description": "Zip code of address." },
+        { "name": "LAT", "type": "float", "description": "Latitude." },
+        { "name": "LON", "type": "float", "description": "Longitude." }
+      ],
+      "identification_fields": ["PROVIDER_ID"]
+    },
+    {
+      "name": "procedures",
+      "description": "Holds the list of procedure codes with details, costs, and reasons.",
+      "columns": [
+        { "name": "DATE", "type": "date", "description": "Date of the procedure." },
+        { "name": "PATIENT_ID", "type": "string", "description": "Patient ID (refers to patients)." },
+        { "name": "ENCOUNTER_ID", "type": "string", "description": "Encounter ID (refers to encounters)." },
+        { "name": "PROCEDURE_CODE", "type": "string", "description": "SNOMED code of the procedure." },
+        { "name": "PROCEDURE_DESCRIPTION", "type": "string", "description": "Description of the code." },
+        { "name": "BASE_COST", "type": "float", "description": "Base cost of the procedure." },
+        { "name": "REASONCODE", "type": "string", "description": "Reason code for performing the procedure." },
+        { "name": "REASONDESCRIPTION", "type": "string", "description": "Description of the reason." }
+      ],
+      "identification_fields": ["ENCOUNTER_ID", "PATIENT_ID"],
+      "date_fields": ["DATE"]
+    },
+    {
+      "name": "payer_transitions",
+      "description": "Holds the list of patients with insurance details.",
+      "columns": [
+        { "name": "PATIENT_ID", "type": "string", "description": "Patient ID (refers to patients)." },
+        { "name": "START_YEAR", "type": "int", "description": "Year insurance started." },
+        { "name": "END_YEAR", "type": "int", "description": "Year insurance ended." },
+        { "name": "PAYER_ID", "type": "string", "description": "Payer ID (refers to payers)." },
+        { "name": "OWNERSHIP", "type": "string", "description": "Self or guardian ownership of payment." }
+      ],
+      "identification_fields": ["PAYER_ID", "PATIENT_ID"],
+      "date_fields": ["START_YEAR", "END_YEAR"]
+    },
+    {
+      "name": "organizations",
+      "description": "Holds organizations’ details like name, address, revenue, etc.",
+      "columns": [
+        { "name": "ORGANIZATION_ID", "type": "string", "description": "Unique key for the organization." },
+        { "name": "NAME", "type": "string", "description": "Name of the organization." },
+        { "name": "ADDRESS", "type": "string", "description": "Address of the organization." },
+        { "name": "CITY", "type": "string", "description": "City location." },
+        { "name": "STATE", "type": "string", "description": "State location." },
+        { "name": "ZIP", "type": "string", "description": "Zip code of address." },
+        { "name": "LAT", "type": "float", "description": "Latitude." },
+        { "name": "LON", "type": "float", "description": "Longitude." },
+        { "name": "PHONE", "type": "string", "description": "Contact number." },
+        { "name": "REVENUE", "type": "float", "description": "Total revenue generated by the organization." }
+      ],
+      "identification_fields": ["ORGANIZATION_ID"]
+    },
+    {
+      "name": "payers",
+      "description": "Holds payer (insurance) details.",
+      "columns": [
+        { "name": "PAYER_ID", "type": "string", "description": "Unique key for the payer." },
+        { "name": "NAME", "type": "string", "description": "Name of the payer." },
+        { "name": "ADDRESS", "type": "string", "description": "Address of the payer." },
+        { "name": "CITY", "type": "string", "description": "City location." },
+        { "name": "STATE_HEADQUARTERED", "type": "string", "description": "State where payer is headquartered." },
+        { "name": "ZIP", "type": "string", "description": "Zip code of address." },
+        { "name": "PHONE", "type": "string", "description": "Contact number." },
+        { "name": "AMOUNT_COVERED", "type": "float", "description": "Total amount covered by insurance." },
+        { "name": "AMOUNT_UNCOVERED", "type": "float", "description": "Total amount not covered." },
+        { "name": "REVENUE", "type": "float", "description": "Revenue generated by the payer." },
+        { "name": "COVERED_ENCOUTERS", "type": "float", "description": "Diagnoses covered by payer." },
+        { "name": "UNCOVERED_ENCOUNTERS", "type": "float", "description": "Diagnoses not covered by payer." },
+        { "name": "COVERED_MEDICATIONS", "type": "float", "description": "Amount of charges covered for medications." },
+        { "name": "UNCOVERED_MEDICATIONS", "type": "float", "description": "Amount of charges not covered for medications." },
+        { "name": "COVERED_PROCEDURES", "type": "float", "description": "Procedure charges covered." },
+        { "name": "UNCOVERED_PROCEDURES", "type": "float", "description": "Procedure charges not covered." },
+        { "name": "COVERED_IMMUNIZATIONS", "type": "float", "description": "Charges covered for immunizations." },
+        { "name": "UNCOVERED_IMMUNIZATIONS", "type": "float", "description": "Charges not covered for immunizations." },
+        { "name": "UNIQUE_CUSTOMERS", "type": "int", "description": "Number of unique customers." }
+      ],
+      "identification_fields": ["PAYER_ID"]
+    }
+  ],
+  "relationships": [
+    { "from_table": "patients", "from_column": "PATIENT_ID", "to_table": "allergies", "to_column": "PATIENT_ID", "relationship": "one-to-many" },
+    { "from_table": "patients", "from_column": "PATIENT_ID", "to_table": "encounters", "to_column": "PATIENT_ID", "relationship": "one-to-many" },
+    { "from_table": "patients", "from_column": "PATIENT_ID", "to_table": "devices", "to_column": "PATIENT_ID", "relationship": "one-to-many" },
+    { "from_table": "patients", "from_column": "PATIENT_ID", "to_table": "conditions", "to_column": "PATIENT_ID", "relationship": "one-to-many" },
+    { "from_table": "patients", "from_column": "PATIENT_ID", "to_table": "medications", "to_column": "PATIENT_ID", "relationship": "one-to-many" },
+    { "from_table": "patients", "from_column": "PATIENT_ID", "to_table": "imaging_studies", "to_column": "PATIENT_ID", "relationship": "one-to-many" },
+    { "from_table": "patients", "from_column": "PATIENT_ID", "to_table": "immunizations", "to_column": "PATIENT_ID", "relationship": "one-to-many" },
+    { "from_table": "patients", "from_column": "PATIENT_ID", "to_table": "procedures", "to_column": "PATIENT_ID", "relationship": "one-to-many" },
+    { "from_table": "patients", "from_column": "PATIENT_ID", "to_table": "observations", "to_column": "PATIENT_ID", "relationship": "one-to-many" },
+    { "from_table": "patients", "from_column": "PATIENT_ID", "to_table": "payer_transitions", "to_column": "PATIENT_ID", "relationship": "one-to-many" },
+    { "from_table": "patients", "from_column": "PATIENT_ID", "to_table": "careplans", "to_column": "PATIENT_ID", "relationship": "one-to-many" },
+
+    { "from_table": "encounters", "from_column": "ENCOUNTER_ID", "to_table": "allergies", "to_column": "ENCOUNTER_ID", "relationship": "one-to-many" },
+    { "from_table": "encounters", "from_column": "ENCOUNTER_ID", "to_table": "conditions", "to_column": "ENCOUNTER_ID", "relationship": "one-to-many" },
+    { "from_table": "encounters", "from_column": "ENCOUNTER_ID", "to_table": "devices", "to_column": "ENCOUNTER_ID", "relationship": "one-to-many" },
+    { "from_table": "encounters", "from_column": "ENCOUNTER_ID", "to_table": "imaging_studies", "to_column": "ENCOUNTER_ID", "relationship": "one-to-many" },
+    { "from_table": "encounters", "from_column": "ENCOUNTER_ID", "to_table": "immunizations", "to_column": "ENCOUNTER_ID", "relationship": "one-to-many" },
+    { "from_table": "encounters", "from_column": "ENCOUNTER_ID", "to_table": "medications", "to_column": "ENCOUNTER_ID", "relationship": "one-to-many" },
+    { "from_table": "encounters", "from_column": "ENCOUNTER_ID", "to_table": "careplans", "to_column": "ENCOUNTER_ID", "relationship": "one-to-many" },
+    { "from_table": "encounters", "from_column": "ENCOUNTER_ID", "to_table": "observations", "to_column": "ENCOUNTER_ID", "relationship": "one-to-many" },
+    { "from_table": "encounters", "from_column": "ENCOUNTER_ID", "to_table": "procedures", "to_column": "ENCOUNTER_ID", "relationship": "one-to-many" },
+
+    { "from_table": "providers", "from_column": "ORGANIZATION_ID", "to_table": "organizations", "to_column": "ORGANIZATION_ID", "relationship": "many-to-one" },
+
+    { "from_table": "encounters", "from_column": "PROVIDER_ID", "to_table": "providers", "to_column": "PROVIDER_ID", "relationship": "many-to-one" },
+    { "from_table": "encounters", "from_column": "PAYER_ID", "to_table": "payers", "to_column": "PAYER_ID", "relationship": "many-to-one" },
+    { "from_table": "encounters", "from_column": "ORGANIZATION_ID", "to_table": "organizations", "to_column": "ORGANIZATION_ID", "relationship": "many-to-one" },
+
+    { "from_table": "medications", "from_column": "PAYER_ID", "to_table": "payer_transitions", "to_column": "PAYER_ID", "relationship": "many-to-one" },
+    { "from_table": "payer_transitions", "from_column": "PAYER_ID", "to_table": "payers", "to_column": "PAYER_ID", "relationship": "many-to-one" }
+  ]
+}
