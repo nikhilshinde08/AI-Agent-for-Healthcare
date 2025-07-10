@@ -1,4 +1,3 @@
-# src/database/connection.py - Optimized for ReAct agent
 import os
 import asyncio
 import json
@@ -14,17 +13,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_required_env_vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
-_missing = [var for var in _required_env_vars if not os.getenv(var)]
-if _missing:
+_REQUIRED_ENV_VARS = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
+_missing_env_vars = [var for var in _REQUIRED_ENV_VARS if not os.getenv(var)]
+if _missing_env_vars:
     raise EnvironmentError(
-        f"Missing required environment variables: {', '.join(_missing)}"
+        f"Missing required environment variables: {', '.join(_missing_env_vars)}"
     )
 
 logger = structlog.get_logger(__name__)
 
 class DatabaseConnection:
-    """Enhanced PostgreSQL connection optimized for ReAct agent with schema management"""
     
     def __init__(self):
         self.engine = None
@@ -33,7 +31,6 @@ class DatabaseConnection:
         self._setup_connection()
     
     def _setup_connection(self):
-        """Initialize database connection from .env - works with ANY database"""
    
         db_url = URL.create(
             drivername="postgresql+asyncpg",
@@ -64,7 +61,6 @@ class DatabaseConnection:
         )
     
     async def test_connection(self) -> Tuple[bool, Optional[str]]:
-        """Test database connection"""
         try:
             async with self.async_session() as session:
                 result = await session.execute(text("SELECT 1 as test"))
@@ -82,7 +78,6 @@ class DatabaseConnection:
             return False, error_msg
     
     async def extract_complete_schema(self) -> Dict[str, Any]:
-        """Extract complete database schema optimized for ReAct agent"""
         try:
             logger.info("🔍 Extracting schema for ReAct agent...")
             
@@ -179,7 +174,6 @@ class DatabaseConnection:
                 except Exception as fk_error:
                     logger.warning(f"Could not extract foreign keys: {fk_error}")
                 
-                # Cache for ReAct agent
                 self.schema_cache = schema
                 logger.info(
                     f"✅ Schema extracted for ReAct agent: "
@@ -192,49 +186,44 @@ class DatabaseConnection:
             raise
     
     async def execute_query(self, sql_query: str) -> Tuple[bool, Any, Optional[str], int]:
-        """Execute SQL query optimized for ReAct agent responses"""
         try:
             logger.info(f"🔧 Executing ReAct agent query: {sql_query}")
             async with self.async_session() as session:
                 await session.execute(text("SET statement_timeout = '30s'"))
                 result = await session.execute(text(sql_query))
                 rows = result.fetchall()
-                cols = result.keys()
+                column_names = result.keys()
                 
-                # Convert to dict format for JSON serialization
-                data = [dict(zip(cols, row)) for row in rows] if rows else []
+                query_results = [dict(zip(column_names, row)) for row in rows] if rows else []
                 
-                # Limit results for ReAct agent
-                if len(data) > 1000:
-                    data = data[:1000]
+                if len(query_results) > 1000:
+                    query_results = query_results[:1000]
                     logger.warning("⚠️ Result truncated to 1000 rows for ReAct agent")
                 
-                logger.info(f"✅ ReAct agent query executed, {len(data)} rows returned")
-                return True, data, None, 200
+                logger.info(f"✅ ReAct agent query executed, {len(query_results)} rows returned")
+                return True, query_results, None, 200
                 
-        except Exception as e:
-            error = str(e)
-            status = self._map_db_error_to_status(e)
-            logger.error(f"❌ ReAct agent query failed ({status}): {error}")
-            return False, None, error, status
+        except Exception as database_error:
+            error_message = str(database_error)
+            status = self._map_db_error_to_status(database_error)
+            logger.error(f"❌ ReAct agent query failed ({status}): {error_message}")
+            return False, None, error_message, status
     
     def _map_db_error_to_status(self, exception: Exception) -> int:
-        """Map database errors to HTTP-like status codes for ReAct agent"""
-        err = str(exception).lower()
-        if any(k in err for k in ("syntax error", "invalid syntax")):
+        error_message = str(exception).lower()
+        if any(k in error_message for k in ("syntax error", "invalid syntax")):
             return 400
-        if any(k in err for k in ("does not exist", "relation", "column", "table")):
+        if any(k in error_message for k in ("does not exist", "relation", "column", "table")):
             return 404
-        if any(k in err for k in ("permission denied", "access denied")):
+        if any(k in error_message for k in ("permission denied", "access denied")):
             return 403
-        if any(k in err for k in ("connection", "server closed", "timeout")):
+        if any(k in error_message for k in ("connection", "server closed", "timeout")):
             return 503
-        if "timeout" in err:
+        if "timeout" in error_message:
             return 408
         return 500
     
     async def get_table_sample(self, table_name: str, limit: int = 5) -> Optional[List[Dict]]:
-        """Get a sample of data from a table for ReAct agent context"""
         clean_name = table_name.split(".")[-1]
         success, data, error, _ = await self.execute_query(
             f"SELECT * FROM {clean_name} LIMIT {limit}"
@@ -245,7 +234,6 @@ class DatabaseConnection:
         return None
     
     async def close(self):
-        """Clean up connections"""
         if self.engine:
             await self.engine.dispose()
             logger.info("🔌 Database connections closed")

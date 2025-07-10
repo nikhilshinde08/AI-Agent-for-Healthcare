@@ -1,4 +1,3 @@
-# main.py - Enhanced with JSON saving functionality
 import asyncio
 import json
 import os
@@ -6,7 +5,6 @@ import sys
 from datetime import datetime
 import uuid
 
-# Add src to Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 src_path = os.path.join(current_dir, 'src')
 if src_path not in sys.path:
@@ -15,7 +13,6 @@ if src_path not in sys.path:
 try:
     import structlog
     
-    # Configure logging
     structlog.configure(
         processors=[
             structlog.stdlib.filter_by_level,
@@ -38,7 +35,6 @@ except ImportError:
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
-# Import JSON saver
 try:
     from utils.json_saver import JSONResponseSaver
     JSON_SAVING_AVAILABLE = True
@@ -47,7 +43,6 @@ except ImportError:
     JSON_SAVING_AVAILABLE = False
 
 async def enhanced_database_cli_with_json():
-    """Enhanced CLI with JSON saving functionality"""
     
     print("\n" + "="*80)
     print("🤖 ENHANCED AZURE OPENAI DATABASE ASSISTANT")
@@ -56,7 +51,6 @@ async def enhanced_database_cli_with_json():
     print("💬 Ask me anything about your healthcare data!")
     print("="*80)
     
-    # Initialize JSON saver
     json_saver = None
     if JSON_SAVING_AVAILABLE:
         json_saver = JSONResponseSaver("json_responses")
@@ -64,14 +58,11 @@ async def enhanced_database_cli_with_json():
     else:
         print("⚠️  JSON saving not available - responses will only be displayed")
     
-    # Generate session ID
     session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
     print(f"📋 Session ID: {session_id}")
     
-    # Track all responses for session summary
     session_responses = []
     
-    # Try to load schema description
     schema_description = None
     try:
         with open("/home/afour/Desktop/SQL_Agent/generic_sql_agent/description.txt", 'r', encoding='utf-8') as f:
@@ -84,11 +75,9 @@ async def enhanced_database_cli_with_json():
     
     print("\n🔧 Initializing database agent...")
     
-    # Try different agent types in order of preference
     agent = None
     agent_type = "unknown"
     
-    # Try ReAct agent first
     try:
         from agents.react_agent import AzureReActDatabaseAgent
         agent = AzureReActDatabaseAgent()
@@ -97,7 +86,6 @@ async def enhanced_database_cli_with_json():
     except Exception as e:
         print(f"⚠️  ReAct Agent failed: {e}")
         
-        # Try enhanced node agent
         try:
             from agents.db_agent import AzureIntelligentDatabaseAgent
             agent = AzureIntelligentDatabaseAgent()
@@ -106,7 +94,6 @@ async def enhanced_database_cli_with_json():
         except Exception as e:
             print(f"⚠️  Enhanced Node Workflow failed: {e}")
             
-            # Try simple fallback
             try:
                 from agents.db_agent import EnhancedReActDatabaseAgent
                 agent = EnhancedReActDatabaseAgent()
@@ -155,12 +142,9 @@ async def enhanced_database_cli_with_json():
     
     while True:
         try:
-            # Get user input
             user_input = input(f"\n💬 [{agent_type}] Ask about your data: ").strip()
             
-            # Handle commands
             if user_input.lower() in ['exit', 'quit', 'q', 'bye']:
-                # Save session summary before exiting
                 if json_saver and session_responses:
                     session_file = json_saver.save_session_responses(session_responses, session_id)
                     if session_file:
@@ -194,15 +178,11 @@ async def enhanced_database_cli_with_json():
             session_count += 1
             print(f"\n🧠 {agent_type} is processing your question...")
             
-            # Process the question
             try:
-                # Record start time
                 start_time = datetime.now()
                 
-                # Different methods for different agent types
                 if agent_type == "ReAct Agent":
                     response_obj = await agent.process_query(user_input)
-                    # Convert Pydantic object to dict
                     if hasattr(response_obj, 'dict'):
                         response = {
                             "success": response_obj.success,
@@ -218,29 +198,24 @@ async def enhanced_database_cli_with_json():
                     else:
                         response = response_obj
                 else:
-                    # Node-based or fallback agents
                     if schema_description:
                         response = await agent.answer_question(user_input, f"session_{session_count}", schema_description)
                     else:
                         response = await agent.answer_question(user_input, f"session_{session_count}")
                 
-                # Record processing time
                 processing_time = (datetime.now() - start_time).total_seconds()
                 
-                # Add processing metadata
                 if "metadata" not in response:
                     response["metadata"] = {}
                 response["metadata"]["processing_time_seconds"] = processing_time
                 response["metadata"]["session_id"] = session_id
                 response["metadata"]["query_number"] = session_count
                 
-                # Save individual response to JSON file
                 if json_saver:
                     saved_file = json_saver.save_response(response, user_input, session_id)
                     if saved_file:
                         print(f"💾 Response saved to: {os.path.basename(saved_file)}")
                 
-                # Add to session responses
                 session_responses.append({
                     "query_metadata": {
                         "original_query": user_input,
@@ -252,7 +227,6 @@ async def enhanced_database_cli_with_json():
                     "response": response
                 })
                 
-                # Display results
                 display_results_with_json_info(response, session_count, agent_type, saved_file if json_saver else None)
                 
             except Exception as e:
@@ -269,7 +243,6 @@ async def enhanced_database_cli_with_json():
                     }
                 }
                 
-                # Save error response too
                 if json_saver:
                     saved_file = json_saver.save_response(error_response, user_input, session_id)
                     if saved_file:
@@ -298,47 +271,38 @@ async def enhanced_database_cli_with_json():
             continue
 
 def display_results_with_json_info(response: dict, session_count: int, agent_type: str, saved_file: str = None):
-    """Display query results with JSON file information"""
     
     print("\n" + "="*70)
     print(f"📊 SESSION {session_count} - {agent_type.upper()} RESULTS")
     print("="*70)
     
-    # Status
     status_icon = "✅" if response.get("success") else "❌"
     status_text = "SUCCESS" if response.get("success") else "ERROR"
     print(f"\n{status_icon} STATUS: {status_text}")
     
-    # JSON file info
     if saved_file:
         print(f"💾 JSON SAVED: {os.path.basename(saved_file)}")
     
-    # AI's understanding
     if response.get("query_understanding"):
         print(f"🧠 UNDERSTANDING: {response['query_understanding']}")
     
-    # Main answer
     if response.get("answer"):
         print(f"💬 ANSWER: {response['answer']}")
     
-    # SQL query
     if response.get("sql_generated"):
         print(f"\n🔧 SQL QUERY:")
         print(f"   {response['sql_generated']}")
     
-    # Data results
     data = response.get("data", [])
     if data and response.get("success"):
         result_count = len(data)
         print(f"\n📊 DATA RESULTS ({result_count} records):")
         print("-" * 50)
         
-        # Show first 3 records
         for i, record in enumerate(data[:3], 1):
             print(f"\n   Record {i}:")
             if isinstance(record, dict):
                 for key, value in record.items():
-                    # Truncate long values
                     display_value = str(value)
                     if len(display_value) > 50:
                         display_value = display_value[:47] + "..."
@@ -349,7 +313,6 @@ def display_results_with_json_info(response: dict, session_count: int, agent_typ
         if result_count > 3:
             print(f"\n   ... and {result_count - 3} more records")
     
-    # Metadata highlights
     metadata = response.get("metadata", {})
     if metadata:
         print(f"\n🔍 METADATA:")
@@ -357,16 +320,13 @@ def display_results_with_json_info(response: dict, session_count: int, agent_typ
             if key in ["processing_time_seconds", "query_type", "tables_used"]:
                 print(f"   {key}: {value}")
     
-    # JSON structure info
     if response.get("structured_response"):
         print(f"\n📋 STRUCTURED RESPONSE: Available in JSON file")
     
-    # System info
     print(f"\n⚡ Powered by: {response.get('powered_by', agent_type)}")
     print("="*70)
 
 def print_help_with_json():
-    """Display help information including JSON features"""
     print("\n" + "="*60)
     print("📖 HELP - HEALTHCARE DATABASE ASSISTANT WITH JSON SAVING")
     print("="*60)
@@ -398,7 +358,6 @@ def print_help_with_json():
     print("   • 'exit' or 'quit' - End session (auto-saves summary)")
 
 def show_saved_files():
-    """Show information about saved JSON files"""
     json_dir = "json_responses"
     
     if not os.path.exists(json_dir):
@@ -414,11 +373,10 @@ def show_saved_files():
     print(f"\n📁 SAVED JSON FILES ({len(files)} files):")
     print("-" * 50)
     
-    # Sort by modification time (newest first)
     files_with_time = [(f, os.path.getmtime(os.path.join(json_dir, f))) for f in files]
     files_with_time.sort(key=lambda x: x[1], reverse=True)
     
-    for i, (filename, mtime) in enumerate(files_with_time[:10], 1):  # Show latest 10
+    for i, (filename, mtime) in enumerate(files_with_time[:10], 1):
         file_time = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
         file_size = os.path.getsize(os.path.join(json_dir, filename))
         print(f"   {i:2d}. {filename}")
@@ -431,7 +389,6 @@ def show_saved_files():
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "test":
-        # Test mode - could add JSON saving test here
         print("🧪 Testing connections...")
         asyncio.run(enhanced_database_cli_with_json())
     else:

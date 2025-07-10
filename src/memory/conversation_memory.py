@@ -8,43 +8,50 @@ import atexit
 import re
 
 class ConversationMemory:
-    """
-    Conversation memory manager that creates a new session each time
-    and archives sessions in a 'sessions' folder.
-    """
     
-    # Class-level storage for current session
     _current_session = None
     _lock = threading.Lock()
     _auto_save_registered = False
     
-    def __init__(self, session_id=None, force_new_session=True):
-        """Initialize a new conversation memory session"""
-        # Create a new session ID if forced or none provided
-        if session_id and not force_new_session:
-            self.session_id = session_id
-        else:
-            self.session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
-        
-        # Ensure sessions folder exists
+    def __init__(self, session_id=None, memory_file_path="conversation_memory.json", force_new_session=False):
+        self.memory_file_path = memory_file_path
         self.sessions_folder = Path("sessions")
         self.sessions_folder.mkdir(exist_ok=True)
         
-        with ConversationMemory._lock:
-            # Start with a fresh session
-            ConversationMemory._current_session = {
-                "session_id": self.session_id,
-                "data": self._create_empty_session()
-            }
+        # Try to load existing session first
+        if session_id and not force_new_session:
+            self.session_id = session_id
+            existing_data = self._load_existing_session(session_id)
+            if existing_data:
+                with ConversationMemory._lock:
+                    ConversationMemory._current_session = {
+                        "session_id": self.session_id,
+                        "data": existing_data
+                    }
+                print(f"Loaded existing session: {self.session_id}")
+            else:
+                with ConversationMemory._lock:
+                    ConversationMemory._current_session = {
+                        "session_id": self.session_id,
+                        "data": self._create_empty_session()
+                    }
+                print(f"Created new session: {self.session_id}")
+        else:
+            # Create new session
+            self.session_id = session_id or f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
+            with ConversationMemory._lock:
+                ConversationMemory._current_session = {
+                    "session_id": self.session_id,
+                    "data": self._create_empty_session()
+                }
             print(f"Created fresh session: {self.session_id}")
             
-            # Register cleanup on exit if not already done
-            if not ConversationMemory._auto_save_registered:
-                atexit.register(ConversationMemory._cleanup_on_exit)
-                ConversationMemory._auto_save_registered = True
+        # Register auto-save
+        if not ConversationMemory._auto_save_registered:
+            atexit.register(ConversationMemory._cleanup_on_exit)
+            ConversationMemory._auto_save_registered = True
     
     def _create_empty_session(self):
-        """Create an empty session structure"""
         return {
             "conversation_history": [],
             "session_start": datetime.now().isoformat(),
@@ -60,8 +67,24 @@ class ConversationMemory:
             "session_type": "fresh_ephemeral"
         }
     
+    def _load_existing_session(self, session_id):
+        """Load existing session from file if it exists"""
+        file_path = self.sessions_folder / f"{session_id}.json"
+        if file_path.exists():
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    session_data = json.load(f)
+                    return session_data.get("data", self._create_empty_session())
+            except Exception as e:
+                print(f"Error loading session {session_id}: {e}")
+        return None
+    
+    def _load_memory(self):
+        """Load memory from file for backward compatibility"""
+        return self._load_existing_session(self.session_id)
+    
     def save_session_to_file(self):
-        """Save the current session to a JSON file in sessions/"""
+        """Save current session to file"""
         with ConversationMemory._lock:
             session_data = ConversationMemory._current_session
             if session_data:
@@ -70,9 +93,12 @@ class ConversationMemory:
                     json.dump(session_data, f, indent=2, default=str)
                 print(f"Session saved to {file_path}")
     
+    def auto_save(self):
+        """Auto-save session after each interaction"""
+        self.save_session_to_file()
+    
     @classmethod
     def _cleanup_on_exit(cls):
-        """Save current session to file on exit"""
         with cls._lock:
             session_data = cls._current_session
             if session_data:
@@ -84,7 +110,6 @@ class ConversationMemory:
     
     @property
     def memory_data(self):
-        """Get current session data from memory"""
         with ConversationMemory._lock:
             if ConversationMemory._current_session:
                 return ConversationMemory._current_session["data"]
@@ -92,12 +117,10 @@ class ConversationMemory:
                 return self._create_empty_session()
     
     def _update_memory_data(self, update_func):
-        """Thread-safe way to update memory data"""
         with ConversationMemory._lock:
             if ConversationMemory._current_session:
                 update_func(ConversationMemory._current_session["data"])
             else:
-                # Session was cleared, reinitialize
                 ConversationMemory._current_session = {
                     "session_id": self.session_id,
                     "data": self._create_empty_session()
@@ -105,11 +128,8 @@ class ConversationMemory:
                 update_func(ConversationMemory._current_session["data"])
     
     def add_interaction(self, user_query, agent_response):
-        """Add a new interaction to memory"""
-        # Determine if response contains natural language
         has_natural_language = self._has_natural_language_response(agent_response)
         
-        # Extract patient context from the current query
         patient_context = self._extract_patient_context(user_query)
         
         def update_session(session_data):
@@ -123,21 +143,19 @@ class ConversationMemory:
                     "result_count": agent_response.get('result_count', 0),
                     "data_sample": self._extract_data_sample(agent_response.get('data')),
                     "has_natural_language": has_natural_language,
+                    "sql_generated": agent_response.get('sql_generated'),
                 },
                 "interaction_id": len(session_data["conversation_history"]) + 1,
                 "query_type": self._classify_query_type(user_query),
                 "patient_context": patient_context
             }
             
-            # Add to conversation history
             session_data["conversation_history"].append(interaction)
             
-            # Update current context with patient information
             if patient_context:
                 session_data["current_context"].update(patient_context)
                 session_data["last_patient_query"] = user_query
             
-            # Update session statistics
             session_data["last_updated"] = datetime.now().isoformat()
             session_data["total_interactions"] += 1
             
@@ -152,13 +170,13 @@ class ConversationMemory:
             print(f"Added interaction {interaction['interaction_id']} to session")
         
         self._update_memory_data(update_session)
+        # Auto-save after each interaction
+        self.auto_save()
     
     def _extract_patient_context(self, user_query):
-        """Extract patient context from user query"""
         context = {}
         query_lower = user_query.lower()
         
-        # Look for patient names (basic pattern matching)
         name_patterns = [
             r'\b([A-Z][a-z]+)\s+(?:patient|records?|data|information)\b',
             r'\bpatient\s+([A-Z][a-z]+)\b',
@@ -172,7 +190,6 @@ class ConversationMemory:
                 context["mentioned_patient"] = match.group(1)
                 break
         
-        # Look for specific query types
         if any(word in query_lower for word in ['medication', 'drug', 'prescription']):
             context["query_focus"] = "medication"
         elif any(word in query_lower for word in ['condition', 'diagnosis', 'disease']):
@@ -181,7 +198,6 @@ class ConversationMemory:
         return context
     
     def get_conversation_context(self, last_n_interactions=3):
-        """Get conversation context from current session"""
         memory_data = self.memory_data
         
         if not memory_data["conversation_history"]:
@@ -189,12 +205,10 @@ class ConversationMemory:
         
         recent_interactions = memory_data["conversation_history"][-last_n_interactions:]
         
-        # Build context with focus on current session
         context = "## Current Session Context:\n"
         context += f"Session ID: {self.session_id}\n"
         context += f"Total interactions: {memory_data['total_interactions']}\n"
         
-        # Add current patient context if any
         current_context = memory_data.get("current_context", {})
         if current_context.get("mentioned_patient"):
             context += f"**Current Patient Focus:** {current_context['mentioned_patient']}\n"
@@ -218,31 +232,26 @@ class ConversationMemory:
         return context
     
     def reset_session(self):
-        """Reset to a completely fresh session"""
         self.__init__(force_new_session=True)
         print(f"Reset to fresh session: {self.session_id}")
     
     def _has_natural_language_response(self, agent_response):
-        """Check if the response contains natural language interpretation"""
         answer = agent_response.get('answer', '') or agent_response.get('message', '')
         
         if not answer or len(answer.strip()) < 10:
             return False
             
-        # Check for indicators of natural language vs raw data
         natural_indicators = [
             "there are", "found", "shows", "indicates", "based on", 
             "according to", "the data shows", "results show"
         ]
         
-        # Check for natural language indicators
         answer_lower = answer.lower()
         has_natural_words = any(indicator in answer_lower for indicator in natural_indicators)
         
         return has_natural_words
     
     def _classify_query_type(self, user_query):
-        """Classify the type of user query"""
         query_lower = user_query.lower()
         
         if any(word in query_lower for word in ['count', 'how many', 'total']):
@@ -255,7 +264,6 @@ class ConversationMemory:
             return "general"
     
     def _extract_data_sample(self, data, max_records=3):
-        """Extract a sample of data for memory storage"""
         if not data:
             return []
         if isinstance(data, list):
@@ -265,26 +273,75 @@ class ConversationMemory:
         else:
             return [{"value": str(data)}]
     
-    def get_session_status(self):
-        """Get current session status"""
+    def get_last_successful_query(self):
+        """Get the last successful query from conversation history"""
+        memory_data = self.memory_data
+        history = memory_data.get("conversation_history", [])
+        
+        # Find the last successful interaction
+        for interaction in reversed(history):
+            if interaction.get("agent_response", {}).get("success", False):
+                return interaction
+        return None
+    
+    def get_memory_summary(self):
+        """Get a summary of current memory state"""
         memory_data = self.memory_data
         return {
             "session_id": self.session_id,
-            "session_type": "ephemeral",
+            "total_interactions": memory_data.get("total_interactions", 0),
+            "successful_queries": memory_data.get("successful_queries", 0),
+            "failed_queries": memory_data.get("failed_queries", 0),
+            "last_updated": memory_data.get("last_updated"),
+            "current_context": memory_data.get("current_context", {}),
+            "session_active": memory_data.get("session_active", True)
+        }
+    
+    def search_memory(self, query_term, max_results=3):
+        """Search through conversation history for relevant interactions"""
+        memory_data = self.memory_data
+        history = memory_data.get("conversation_history", [])
+        
+        results = []
+        query_lower = query_term.lower()
+        
+        for interaction in reversed(history):
+            user_query = interaction.get("user_query", "").lower()
+            agent_response = interaction.get("agent_response", {}).get("answer", "").lower()
+            
+            if (query_lower in user_query or query_lower in agent_response) and len(results) < max_results:
+                results.append(interaction)
+        
+        return results
+    
+    def clear_session_memory(self):
+        """Clear current session memory"""
+        with ConversationMemory._lock:
+            ConversationMemory._current_session = {
+                "session_id": self.session_id,
+                "data": self._create_empty_session()
+            }
+        print(f"Cleared memory for session: {self.session_id}")
+    
+    def get_session_status(self):
+        memory_data = self.memory_data
+        return {
+            "session_id": self.session_id,
+            "session_type": "persistent",
             "session_active": memory_data.get("session_active", True),
             "total_interactions": memory_data["total_interactions"],
             "last_updated": memory_data["last_updated"],
             "session_start": memory_data["session_start"],
             "current_patient": memory_data.get("current_context", {}).get("mentioned_patient"),
-            "memory_location": "in_memory_with_file_backup"
+            "memory_location": "persistent_file_storage"
         }
 
-# Example usage
+# Create an alias for backward compatibility
+ConversationMemoryManager = ConversationMemory
+
 if __name__ == "__main__":
-    # Create a new conversation memory instance
     memory = ConversationMemory()
     
-    # Add a sample interaction
     memory.add_interaction(
         "Show me John's medical records",
         {
@@ -299,13 +356,10 @@ if __name__ == "__main__":
         }
     )
     
-    # Get conversation context
     context = memory.get_conversation_context()
     print(context)
     
-    # Save the session to file
     memory.save_session_to_file()
     
-    # Get session status
     status = memory.get_session_status()
     print(f"Session status: {status}")

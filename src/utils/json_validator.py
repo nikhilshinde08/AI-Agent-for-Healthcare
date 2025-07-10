@@ -1,15 +1,12 @@
-# src/utils/json_validator.py
 from typing import Any, Dict, List, Optional, Union
 from pydantic import ValidationError
 import json
 import re
 
 class JSONResponseValidator:
-    """Enhanced JSON validation and correction utilities"""
     
     @staticmethod
     def validate_and_fix_json(response_text: str) -> Dict[str, Any]:
-        """Validate and attempt to fix malformed JSON responses"""
         
         cleaned_text = response_text.strip()
         if cleaned_text.startswith('{') and cleaned_text.endswith('}'):
@@ -39,7 +36,6 @@ class JSONResponseValidator:
     
     @staticmethod
     def _construct_from_text(text: str) -> Dict[str, Any]:
-        """Construct JSON structure from unstructured text"""
         result = {
             "success": False,
             "message": "Unable to parse structured response",

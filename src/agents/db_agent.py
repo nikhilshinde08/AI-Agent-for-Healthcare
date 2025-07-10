@@ -5,10 +5,10 @@ import structlog
 from datetime import datetime
 
 try:
-    from memory.conversation_memory import ConversationMemoryManager
+    from memory.conversation_memory import ConversationMemory as ConversationMemoryManager
 except ImportError:
     try:
-        from src.memory.conversation_memory import ConversationMemoryManager
+        from src.memory.conversation_memory import ConversationMemory as ConversationMemoryManager
     except ImportError:
         ConversationMemoryManager = None
 
@@ -27,7 +27,6 @@ class AzureReActDatabaseAgent:
         self._initialize_react_agent()
 
     def _initialize_react_agent(self):
-        """Initialize the enhanced ReAct agent"""
         try:
             from agents.react_agent import LangGraphReActDatabaseAgent
             self.agent = LangGraphReActDatabaseAgent(dialect="PostgreSQL", top_k=10)
@@ -37,18 +36,15 @@ class AzureReActDatabaseAgent:
             raise e
 
     async def answer_question(self, user_question: str, session_id: str = None, schema_description: str = None) -> dict:
-        """Answer user question with enhanced natural language processing"""
         try:
-            # Handle session management
             if session_id and session_id != self.session_id:
                 self.session_id = session_id
                 if self.memory_manager:
-                    self.memory_manager.session_id = session_id
-                    self.memory_manager.memory_data = self.memory_manager._load_memory()
+                    # Create a new memory manager instance for the new session
+                    self.memory_manager = ConversationMemoryManager(session_id, force_new_session=False)
             
             logger.info(f"Processing question: '{user_question}' for session: {self.session_id}")
             
-            # Get conversation context
             conversation_context = ""
             if self.memory_manager:
                 conversation_context = self.memory_manager.get_conversation_context()
@@ -57,10 +53,8 @@ class AzureReActDatabaseAgent:
                     logger.info(f"Enhanced follow-up question: {enhanced_question}")
                     user_question = enhanced_question
             
-            # Process the query with the enhanced agent
             response_obj = await self.agent.process_query(user_question, conversation_context)
             
-            # Convert to legacy format
             if hasattr(response_obj, 'dict'):
                 pydantic_response = response_obj.dict()
             else:
@@ -74,7 +68,6 @@ class AzureReActDatabaseAgent:
                     "metadata": getattr(response_obj, 'metadata', {})
                 }
             
-            # Create legacy response format
             legacy_response = {
                 "success": pydantic_response.get("success", False),
                 "answer": pydantic_response.get("message", "No response"),
@@ -90,7 +83,6 @@ class AzureReActDatabaseAgent:
                 "session_id": self.session_id
             }
             
-            # Add memory summary if available
             if self.memory_manager:
                 legacy_response["metadata"]["memory_summary"] = self.memory_manager.get_memory_summary()
                 self.memory_manager.add_interaction(user_question, legacy_response)
@@ -124,7 +116,6 @@ class AzureReActDatabaseAgent:
             return error_response
 
     def _is_follow_up_question(self, user_question: str) -> bool:
-        """Check if the question is a follow-up to previous interactions"""
         follow_up_indicators = [
             "from the previous", "from last", "from that", "from those",
             "based on the above", "based on previous", "based on last",
@@ -138,7 +129,6 @@ class AzureReActDatabaseAgent:
         return any(indicator in question_lower for indicator in follow_up_indicators)
 
     def _enhance_question_with_context(self, user_question: str, conversation_context: str) -> str:
-        """Enhance follow-up questions with conversation context"""
         if not conversation_context:
             return user_question
         
@@ -161,7 +151,6 @@ Please answer the current question using the context from the previous interacti
         return user_question
 
     def _extract_data_from_results(self, results):
-        """Extract data from results for legacy format"""
         if not results:
             return []
         
@@ -180,7 +169,6 @@ Please answer the current question using the context from the previous interacti
         return data
 
     def clear_session_memory(self):
-        """Clear session memory"""
         if self.memory_manager:
             self.memory_manager.clear_session_memory()
             logger.info(f"Cleared memory for session: {self.session_id}")
@@ -188,50 +176,44 @@ Please answer the current question using the context from the previous interacti
             logger.warning("Memory manager not available for clearing")
 
     def get_memory_summary(self) -> Dict[str, Any]:
-        """Get memory summary"""
         if self.memory_manager:
             return self.memory_manager.get_memory_summary()
         return {"error": "Memory manager not available"}
 
     def search_memory(self, query_term: str, max_results: int = 3) -> List[Dict[str, Any]]:
-        """Search conversation memory"""
         if self.memory_manager:
             return self.memory_manager.search_memory(query_term, max_results)
         return []
 
     def get_conversation_history(self, last_n_interactions: int = 10) -> List[Dict[str, Any]]:
-        """Get conversation history"""
         if self.memory_manager:
-            return self.memory_manager.memory_data["conversation_history"][-last_n_interactions:]
+            memory_data = self.memory_manager.memory_data
+            return memory_data.get("conversation_history", [])[-last_n_interactions:]
         return []
 
     def start_new_session(self, new_session_id: str = None):
-        """Start a new conversation session"""
         if self.memory_manager:
             self.memory_manager.clear_session_memory()
         
         self.session_id = new_session_id or f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
         if self.memory_manager:
-            self.memory_manager.session_id = self.session_id
-            self.memory_manager.memory_data = self.memory_manager._create_empty_session()
+            self.memory_manager = ConversationMemoryManager(self.session_id, force_new_session=True)
         
         logger.info(f"Started new session: {self.session_id}")
 
     def end_session(self):
-        """End the current session"""
         if self.memory_manager:
+            # Save the session before ending
+            self.memory_manager.save_session_to_file()
             self.memory_manager.clear_session_memory()
 
 # Backward compatibility aliases
 class AzureIntelligentDatabaseAgent(AzureReActDatabaseAgent):
-    """Alias for backward compatibility"""
     pass
 
 class EnhancedReActDatabaseAgent(AzureReActDatabaseAgent):
-    """Alias for backward compatibility"""
     pass
 
 def create_database_agent(approach: str = "react", session_id: str = None, memory_file_path: str = "conversation_memory.json"):
-    """Factory function to create database agent"""
     return AzureReActDatabaseAgent(session_id=session_id, memory_file_path=memory_file_path)

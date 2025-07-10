@@ -11,7 +11,6 @@ load_dotenv()
 logger = structlog.get_logger(__name__)
 
 class AzureIntelligentQueryGenerator:
-    """Enhanced query generator compatible with ReAct agent"""
     
     def __init__(self):
         self.llm = AzureChatOpenAI(
@@ -25,7 +24,6 @@ class AzureIntelligentQueryGenerator:
         self._schema_description = None
     
     async def generate_sql_from_natural_language(self, user_query: str, full_schema: Dict[str, Any]) -> Tuple[str, Optional[str]]:
-        """Enhanced SQL generation with JSON-aware processing"""
         try:
             logger.info(f"Analyzing user question with Azure OpenAI: {user_query}")
             
@@ -60,7 +58,6 @@ class AzureIntelligentQueryGenerator:
             return "", error_msg
     
     def _find_relevant_tables_intelligent(self, user_query: str, full_schema: Dict[str, Any]) -> Dict[str, Any]:
-        """Enhanced table discovery with healthcare focus"""
         query_lower = user_query.lower()
         query_words = set(re.findall(r'\b\w+\b', query_lower))
         
@@ -126,7 +123,6 @@ class AzureIntelligentQueryGenerator:
         }
     
     def _create_enhanced_system_prompt(self, full_schema: Dict[str, Any], relevant_data: Dict[str, Any]) -> str:
-        """Enhanced system prompt with healthcare context"""
         
         schema_context = ""
         if self._schema_description:
@@ -172,7 +168,6 @@ EXAMPLES:
 """
 
     def _format_schema_for_prompt(self, relevant_data: Dict[str, Any]) -> str:
-        """Format schema with lowercase emphasis for PostgreSQL"""
         schema_text = []
         
         for table_key, table_info in relevant_data["tables"].items():
@@ -180,27 +175,26 @@ EXAMPLES:
             schema_text.append(f"\nTable: {table_name}")
             schema_text.append("Columns (use these LOWERCASE names in PostgreSQL):")
             
-            for col in table_info.get("columns", []):
-                col_name_lower = col['name'].lower()
-                col_info = f"  - {col_name_lower} ({col['type']})"
-                if not col.get('nullable', True):
-                    col_info += " NOT NULL"
-                schema_text.append(col_info)
+            for column in table_info.get("columns", []):
+                column_name_lower = column['name'].lower()
+                column_info = f"  - {column_name_lower} ({column['type']})"
+                if not column.get('nullable', True):
+                    column_info += " NOT NULL"
+                schema_text.append(column_info)
         
         relationships = relevant_data.get("relationships", [])
         if relationships:
             schema_text.append("\nRelationships (use lowercase column names):")
-            for rel in relationships:
-                from_table = rel["from_table"].split(".")[-1]
-                to_table = rel["to_table"].split(".")[-1]
-                from_col = rel['from_column'].lower()
-                to_col = rel['to_column'].lower()
-                schema_text.append(f"  - {from_table}.{from_col} → {to_table}.{to_col}")
+            for relationship in relationships:
+                from_table = relationship["from_table"].split(".")[-1]
+                to_table = relationship["to_table"].split(".")[-1]
+                from_column = relationship['from_column'].lower()
+                to_column = relationship['to_column'].lower()
+                schema_text.append(f"  - {from_table}.{from_column} → {to_table}.{to_column}")
         
         return "\n".join(schema_text)
     
     def _create_validated_user_prompt(self, user_query: str, relevant_data: Dict[str, Any]) -> str:
-        """Create user prompt with validation context"""
         
         available_tables = list(relevant_data["tables"].keys())
         available_columns = []
@@ -222,7 +216,6 @@ If the question cannot be answered with the available schema, respond with "NO_V
 Otherwise, generate a valid PostgreSQL SELECT statement."""
     
     def _extract_and_validate_sql_with_schema(self, response: str, relevant_data: Dict[str, Any]) -> Optional[str]:
-        """Extract and validate SQL with enhanced error handling"""
         response = response.strip()
         
         if "NO_VALID_QUERY" in response:
@@ -242,7 +235,6 @@ Otherwise, generate a valid PostgreSQL SELECT statement."""
         return sql_query
     
     def _extract_sql_from_response(self, response: str) -> Optional[str]:
-        """Extract SQL query from response with multiple strategies"""
         
         if "```sql" in response:
             start = response.find("```sql") + 6
@@ -269,7 +261,6 @@ Otherwise, generate a valid PostgreSQL SELECT statement."""
         return sql_query if sql_query else None
     
     def _validate_sql_basics(self, sql_query: str) -> bool:
-        """Basic SQL validation"""
         if not sql_query:
             return False
         
@@ -288,13 +279,12 @@ Otherwise, generate a valid PostgreSQL SELECT statement."""
         return True
     
     def _validate_sql_against_schema(self, sql_query: str, relevant_data: Dict[str, Any]) -> bool:
-        """Validate SQL against available schema"""
         
         available_tables = {}
         for table_key, table_info in relevant_data["tables"].items():
             table_name = table_info["name"]
-            columns = set(col['name'].lower() for col in table_info.get("columns", []))
-            available_tables[table_name.lower()] = columns
+            column_names = set(column['name'].lower() for column in table_info.get("columns", []))
+            available_tables[table_name.lower()] = column_names
         
         sql_upper = sql_query.upper()
         table_pattern = r'(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_]*)'
@@ -320,7 +310,6 @@ Otherwise, generate a valid PostgreSQL SELECT statement."""
         return True
     
     def validate_query_syntax(self, sql_query: str) -> Tuple[bool, Optional[str]]:
-        """Enhanced syntax validation for JSON responses"""
         try:
             if not sql_query:
                 return False, "Empty query"
