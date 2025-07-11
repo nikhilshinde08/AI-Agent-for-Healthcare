@@ -1,438 +1,541 @@
-# main.py - Enhanced with JSON saving functionality
-import asyncio
+
 import json
 import os
-import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any, List, Optional
 import uuid
+import structlog
 
-# Add src to Python path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-src_path = os.path.join(current_dir, 'src')
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
+logger = structlog.get_logger(__name__)
 
-try:
-    import structlog
+class JSONResponseSaver:
+    """Enhanced JSON response saver with organized storage"""
     
-    # Configure logging
-    structlog.configure(
-        processors=[
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.PositionalArgumentsFormatter(),
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.JSONRenderer()
-        ],
-        context_class=dict,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
-    )
-    
-    logger = structlog.get_logger(__name__)
-except ImportError:
-    print("Warning: structlog not available, using basic logging")
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-
-# Import JSON saver
-try:
-    from utils.json_saver import JSONResponseSaver
-    JSON_SAVING_AVAILABLE = True
-except ImportError:
-    print("Warning: JSON saver not available")
-    JSON_SAVING_AVAILABLE = False
-
-async def enhanced_database_cli_with_json():
-    """Enhanced CLI with JSON saving functionality"""
-    
-    print("\n" + "="*80)
-    print("🤖 ENHANCED AZURE OPENAI DATABASE ASSISTANT")
-    print("⚡ Powered by Azure OpenAI with JSON Output & Saving")
-    print("💾 All responses automatically saved as JSON files")
-    print("💬 Ask me anything about your healthcare data!")
-    print("="*80)
-    
-    # Initialize JSON saver
-    json_saver = None
-    if JSON_SAVING_AVAILABLE:
-        json_saver = JSONResponseSaver("json_responses")
-        print("✅ JSON saving enabled - responses will be saved to 'json_responses/' folder")
-    else:
-        print("⚠️  JSON saving not available - responses will only be displayed")
-    
-    # Generate session ID
-    session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
-    print(f"📋 Session ID: {session_id}")
-    
-    # Track all responses for session summary
-    session_responses = []
-    
-    # Try to load schema description
-    schema_description = None
-    try:
-        with open("/home/afour/Desktop/SQL_Agent/generic_sql_agent/description.txt", 'r', encoding='utf-8') as f:
-            schema_description = f.read().strip()
-            print(f"✅ Loaded database description ({len(schema_description)} characters)")
-    except FileNotFoundError:
-        print("⚠️  description.txt not found - will infer from database structure")
-    except Exception as e:
-        print(f"⚠️  Error loading description.txt: {e}")
-    
-    print("\n🔧 Initializing database agent...")
-    
-    # Try different agent types in order of preference
-    agent = None
-    agent_type = "unknown"
-    
-    # Try ReAct agent first
-    try:
-        from agents.react_agent import AzureReActDatabaseAgent
-        agent = AzureReActDatabaseAgent()
-        agent_type = "ReAct Agent"
-        print("✅ ReAct Agent initialized successfully!")
-    except Exception as e:
-        print(f"⚠️  ReAct Agent failed: {e}")
+    def __init__(self, base_dir: str = "json_responses"):
+        self.base_dir = Path(base_dir)
+        self.base_dir.mkdir(exist_ok=True)
         
-        # Try enhanced node agent
+
+        self.responses_dir = self.base_dir / "responses"
+        self.sessions_dir = self.base_dir / "sessions"
+        self.daily_dir = self.base_dir / "daily"
+        self.exports_dir = self.base_dir / "exports"
+        
+        for dir_path in [self.responses_dir, self.sessions_dir, self.daily_dir, self.exports_dir]:
+            dir_path.mkdir(exist_ok=True)
+        
+        logger.info(f"JSON Response Saver initialized at {self.base_dir}")
+    
+    def save_response(self, response: Dict[str, Any], user_query: str, session_id: str) -> Optional[str]:
+        """Save individual response to JSON file"""
         try:
-            from agents.db_agent import AzureIntelligentDatabaseAgent
-            agent = AzureIntelligentDatabaseAgent()
-            agent_type = "Enhanced Node Workflow"
-            print("✅ Enhanced Node Workflow initialized successfully!")
+
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            unique_id = str(uuid.uuid4())[:8]
+            filename = f"response_{timestamp}_{unique_id}.json"
+            filepath = self.responses_dir / filename
+            
+
+            enhanced_response = {
+                "metadata": {
+                    "filename": filename,
+                    "saved_at": datetime.now().isoformat(),
+                    "session_id": session_id,
+                    "user_query": user_query,
+                    "response_type": "individual_query_response",
+                    "saver_version": "2.0"
+                },
+                "query_info": {
+                    "original_query": user_query,
+                    "query_length": len(user_query),
+                    "query_type": self._classify_query_type(user_query),
+                    "timestamp": datetime.now().isoformat()
+                },
+                "response_data": response,
+                "analysis": {
+                    "success": response.get('success', False),
+                    "has_data": bool(response.get('data') or response.get('results')),
+                    "result_count": response.get('result_count', 0),
+                    "has_sql": bool(response.get('sql_generated') or response.get('sql_query')),
+                    "processing_time": response.get('metadata', {}).get('processing_time_seconds'),
+                    "agent_type": response.get('metadata', {}).get('agent_type', 'unknown')
+                }
+            }
+            
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(enhanced_response, f, indent=2, ensure_ascii=False, default=str)
+            
+            logger.info(f"Response saved to {filepath}")
+            return str(filepath)
+            
         except Exception as e:
-            print(f"⚠️  Enhanced Node Workflow failed: {e}")
-            
-            # Try simple fallback
-            try:
-                from agents.db_agent import EnhancedReActDatabaseAgent
-                agent = EnhancedReActDatabaseAgent()
-                agent_type = "Fallback Agent"
-                print("✅ Fallback Agent initialized successfully!")
-            except Exception as e:
-                print(f"❌ All agent types failed: {e}")
-                print("\n💡 Check your configuration:")
-                print("   • Azure OpenAI credentials in .env")
-                print("   • Database connection settings")
-                print("   • Required dependencies installed")
-                return
+            logger.error(f"Error saving response: {e}")
+            return None
     
-    if not agent:
-        print("❌ No agent could be initialized")
-        return
-    
-    print(f"\n🎯 {agent_type} is ready!")
-    print("\n🏥 Healthcare Database Capabilities:")
-    print("   • Patient demographics and medical records")
-    print("   • Medical conditions and diagnoses")
-    print("   • Medications and prescriptions")
-    print("   • Medical procedures and treatments")
-    print("   • Healthcare providers and organizations")
-    
-    print("\n💬 Example Questions:")
-    print("   • 'How many patients do we have?'")
-    print("   • 'Show me patients with diabetes'")
-    print("   • 'What medications are prescribed for heart conditions?'")
-    print("   • 'List recent emergency room visits'")
-    
-    print("\n💾 JSON Saving Features:")
-    if json_saver:
-        print("   ✓ Individual response files for each query")
-        print("   ✓ Session summary file at the end")
-        print("   ✓ Daily summary files")
-        print("   ✓ Searchable JSON format with metadata")
-    else:
-        print("   ⚠️  JSON saving not available in this session")
-    
-    print("\n" + "-"*80)
-    print("Type 'exit', 'help', 'save-session', or ask your question")
-    print("-"*80)
-    
-    session_count = 0
-    
-    while True:
+    def save_session_responses(self, session_responses: List[Dict[str, Any]], session_id: str) -> Optional[str]:
+        """Save complete session responses to JSON file"""
         try:
-            # Get user input
-            user_input = input(f"\n💬 [{agent_type}] Ask about your data: ").strip()
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"session_{session_id}_{timestamp}.json"
+            filepath = self.sessions_dir / filename
             
-            # Handle commands
-            if user_input.lower() in ['exit', 'quit', 'q', 'bye']:
-                # Save session summary before exiting
-                if json_saver and session_responses:
-                    session_file = json_saver.save_session_responses(session_responses, session_id)
-                    if session_file:
-                        print(f"💾 Session summary saved to: {session_file}")
-                
-                print(f"\n👋 Thank you for using the {agent_type}!")
-                print(f"📊 Session Summary: {len(session_responses)} queries processed")
+
+            total_queries = len(session_responses)
+            successful_queries = sum(1 for r in session_responses if r.get('response', {}).get('success', False))
+            failed_queries = total_queries - successful_queries
+            total_results = sum(r.get('response', {}).get('result_count', 0) for r in session_responses)
+            
+
+            session_summary = {
+                "session_metadata": {
+                    "session_id": session_id,
+                    "filename": filename,
+                    "saved_at": datetime.now().isoformat(),
+                    "session_type": "complete_session_export",
+                    "saver_version": "2.0"
+                },
+                "session_statistics": {
+                    "total_queries": total_queries,
+                    "successful_queries": successful_queries,
+                    "failed_queries": failed_queries,
+                    "success_rate": (successful_queries / max(total_queries, 1)) * 100,
+                    "total_results_returned": total_results,
+                    "session_duration": self._calculate_session_duration(session_responses)
+                },
+                "query_analysis": {
+                    "query_types": self._analyze_query_types(session_responses),
+                    "most_common_agent": self._find_most_common_agent(session_responses),
+                    "average_processing_time": self._calculate_average_processing_time(session_responses)
+                },
+                "responses": session_responses
+            }
+            
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(session_summary, f, indent=2, ensure_ascii=False, default=str)
+            
+            logger.info(f"Session responses saved to {filepath}")
+            return str(filepath)
+            
+        except Exception as e:
+            logger.error(f"Error saving session responses: {e}")
+            return None
+    
+    def save_daily_summary(self, date: str = None) -> Optional[str]:
+        """Save daily summary of all responses"""
+        try:
+            if date is None:
+                date = datetime.now().strftime('%Y-%m-%d')
+            
+            filename = f"daily_summary_{date}.json"
+            filepath = self.daily_dir / filename
+            
+
+            daily_responses = []
+            for response_file in self.responses_dir.glob("*.json"):
+                try:
+                    with open(response_file, 'r', encoding='utf-8') as f:
+                        response_data = json.load(f)
+                    
+
+                    saved_at = response_data.get('metadata', {}).get('saved_at', '')
+                    if saved_at.startswith(date):
+                        daily_responses.append(response_data)
+                except Exception as e:
+                    logger.warning(f"Error reading response file {response_file}: {e}")
+            
+
+            daily_summary = {
+                "summary_metadata": {
+                    "date": date,
+                    "filename": filename,
+                    "created_at": datetime.now().isoformat(),
+                    "summary_type": "daily_responses_summary",
+                    "saver_version": "2.0"
+                },
+                "daily_statistics": {
+                    "total_responses": len(daily_responses),
+                    "successful_queries": sum(1 for r in daily_responses if r.get('analysis', {}).get('success', False)),
+                    "failed_queries": sum(1 for r in daily_responses if not r.get('analysis', {}).get('success', False)),
+                    "total_results": sum(r.get('analysis', {}).get('result_count', 0) for r in daily_responses),
+                    "unique_sessions": len(set(r.get('metadata', {}).get('session_id') for r in daily_responses if r.get('metadata', {}).get('session_id')))
+                },
+                "query_analysis": {
+                    "query_types": self._analyze_daily_query_types(daily_responses),
+                    "most_active_hour": self._find_most_active_hour(daily_responses),
+                    "average_query_length": self._calculate_average_query_length(daily_responses)
+                },
+                "responses": daily_responses
+            }
+            
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(daily_summary, f, indent=2, ensure_ascii=False, default=str)
+            
+            logger.info(f"Daily summary saved to {filepath}")
+            return str(filepath)
+            
+        except Exception as e:
+            logger.error(f"Error saving daily summary: {e}")
+            return None
+    
+    def export_session_data(self, session_id: str, export_format: str = "json") -> Optional[str]:
+        """Export session data in specified format"""
+        try:
+
+            session_file = None
+            for file in self.sessions_dir.glob(f"session_{session_id}_*.json"):
+                session_file = file
                 break
             
-            if user_input.lower() in ['help', 'h']:
-                print_help_with_json()
-                continue
+            if not session_file:
+                logger.warning(f"Session file not found for session_id: {session_id}")
+                return None
             
-            if user_input.lower() == 'save-session':
-                if json_saver and session_responses:
-                    session_file = json_saver.save_session_responses(session_responses, session_id)
-                    if session_file:
-                        print(f"💾 Session manually saved to: {session_file}")
-                else:
-                    print("⚠️  No responses to save or JSON saver not available")
-                continue
-            
-            if user_input.lower() == 'show-files':
-                show_saved_files()
-                continue
-            
-            if not user_input:
-                print("💭 Please ask a question about your healthcare data!")
-                continue
-            
-            session_count += 1
-            print(f"\n🧠 {agent_type} is processing your question...")
-            
-            # Process the question
-            try:
-                # Record start time
-                start_time = datetime.now()
-                
-                # Different methods for different agent types
-                if agent_type == "ReAct Agent":
-                    response_obj = await agent.process_query(user_input)
-                    # Convert Pydantic object to dict
-                    if hasattr(response_obj, 'dict'):
-                        response = {
-                            "success": response_obj.success,
-                            "answer": response_obj.message,
-                            "query_understanding": response_obj.query_understanding,
-                            "data": [r.data for r in response_obj.results] if response_obj.results else [],
-                            "sql_generated": response_obj.sql_query,
-                            "result_count": response_obj.result_count,
-                            "metadata": response_obj.metadata,
-                            "powered_by": response_obj.powered_by,
-                            "structured_response": response_obj.dict()
-                        }
-                    else:
-                        response = response_obj
-                else:
-                    # Node-based or fallback agents
-                    if schema_description:
-                        response = await agent.answer_question(user_input, f"session_{session_count}", schema_description)
-                    else:
-                        response = await agent.answer_question(user_input, f"session_{session_count}")
-                
-                # Record processing time
-                processing_time = (datetime.now() - start_time).total_seconds()
-                
-                # Add processing metadata
-                if "metadata" not in response:
-                    response["metadata"] = {}
-                response["metadata"]["processing_time_seconds"] = processing_time
-                response["metadata"]["session_id"] = session_id
-                response["metadata"]["query_number"] = session_count
-                
-                # Save individual response to JSON file
-                if json_saver:
-                    saved_file = json_saver.save_response(response, user_input, session_id)
-                    if saved_file:
-                        print(f"💾 Response saved to: {os.path.basename(saved_file)}")
-                
-                # Add to session responses
-                session_responses.append({
-                    "query_metadata": {
-                        "original_query": user_input,
-                        "timestamp": start_time.isoformat(),
-                        "session_id": session_id,
-                        "query_number": session_count,
-                        "processing_time_seconds": processing_time
-                    },
-                    "response": response
-                })
-                
-                # Display results
-                display_results_with_json_info(response, session_count, agent_type, saved_file if json_saver else None)
-                
-            except Exception as e:
-                error_response = {
-                    "success": False,
-                    "answer": f"Error processing question: {str(e)}",
-                    "query_understanding": user_input,
-                    "data": None,
-                    "sql_generated": None,
-                    "metadata": {
-                        "error_type": type(e).__name__,
-                        "session_id": session_id,
-                        "query_number": session_count
-                    }
-                }
-                
-                # Save error response too
-                if json_saver:
-                    saved_file = json_saver.save_response(error_response, user_input, session_id)
-                    if saved_file:
-                        print(f"💾 Error response saved to: {os.path.basename(saved_file)}")
-                
-                session_responses.append({
-                    "query_metadata": {
-                        "original_query": user_input,
-                        "timestamp": datetime.now().isoformat(),
-                        "session_id": session_id,
-                        "query_number": session_count,
-                        "error": True
-                    },
-                    "response": error_response
-                })
-                
-                print(f"\n❌ Error processing question: {str(e)}")
-                print("💡 Try rephrasing your question or check your configuration")
-                logger.error(f"Query processing error: {e}")
-            
-        except KeyboardInterrupt:
-            print(f"\n\n👋 {agent_type} session ended!")
-            break
-        except Exception as e:
-            print(f"\n❌ Unexpected error: {str(e)}")
-            continue
 
-def display_results_with_json_info(response: dict, session_count: int, agent_type: str, saved_file: str = None):
-    """Display query results with JSON file information"""
-    
-    print("\n" + "="*70)
-    print(f"📊 SESSION {session_count} - {agent_type.upper()} RESULTS")
-    print("="*70)
-    
-    # Status
-    status_icon = "✅" if response.get("success") else "❌"
-    status_text = "SUCCESS" if response.get("success") else "ERROR"
-    print(f"\n{status_icon} STATUS: {status_text}")
-    
-    # JSON file info
-    if saved_file:
-        print(f"💾 JSON SAVED: {os.path.basename(saved_file)}")
-    
-    # AI's understanding
-    if response.get("query_understanding"):
-        print(f"🧠 UNDERSTANDING: {response['query_understanding']}")
-    
-    # Main answer
-    if response.get("answer"):
-        print(f"💬 ANSWER: {response['answer']}")
-    
-    # SQL query
-    if response.get("sql_generated"):
-        print(f"\n🔧 SQL QUERY:")
-        print(f"   {response['sql_generated']}")
-    
-    # Data results
-    data = response.get("data", [])
-    if data and response.get("success"):
-        result_count = len(data)
-        print(f"\n📊 DATA RESULTS ({result_count} records):")
-        print("-" * 50)
-        
-        # Show first 3 records
-        for i, record in enumerate(data[:3], 1):
-            print(f"\n   Record {i}:")
-            if isinstance(record, dict):
-                for key, value in record.items():
-                    # Truncate long values
-                    display_value = str(value)
-                    if len(display_value) > 50:
-                        display_value = display_value[:47] + "..."
-                    print(f"      {key}: {display_value}")
+            with open(session_file, 'r', encoding='utf-8') as f:
+                session_data = json.load(f)
+            
+
+            if export_format.lower() == "json":
+                return str(session_file)
+            elif export_format.lower() == "csv":
+                return self._export_to_csv(session_data, session_id)
+            elif export_format.lower() == "txt":
+                return self._export_to_txt(session_data, session_id)
             else:
-                print(f"      {record}")
+                logger.error(f"Unsupported export format: {export_format}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error exporting session data: {e}")
+            return None
+    
+    def _export_to_csv(self, session_data: Dict[str, Any], session_id: str) -> Optional[str]:
+        """Export session data to CSV format"""
+        try:
+            import csv
+            
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"session_{session_id}_{timestamp}.csv"
+            filepath = self.exports_dir / filename
+            
+            with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = ['timestamp', 'user_query', 'success', 'result_count', 'sql_query', 'response_message']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                
+                writer.writeheader()
+                for response in session_data.get('responses', []):
+                    query_metadata = response.get('query_metadata', {})
+                    response_data = response.get('response', {})
+                    
+                    writer.writerow({
+                        'timestamp': query_metadata.get('timestamp', ''),
+                        'user_query': query_metadata.get('original_query', ''),
+                        'success': response_data.get('success', False),
+                        'result_count': response_data.get('result_count', 0),
+                        'sql_query': response_data.get('sql_generated', ''),
+                        'response_message': response_data.get('message', '')
+                    })
+            
+            logger.info(f"Session exported to CSV: {filepath}")
+            return str(filepath)
+            
+        except Exception as e:
+            logger.error(f"Error exporting to CSV: {e}")
+            return None
+    
+    def _export_to_txt(self, session_data: Dict[str, Any], session_id: str) -> Optional[str]:
+        """Export session data to readable text format"""
+        try:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"session_{session_id}_{timestamp}.txt"
+            filepath = self.exports_dir / filename
+            
+            with open(filepath, 'w', encoding='utf-8') as txtfile:
+
+                txtfile.write(f"SESSION REPORT: {session_id}\n")
+                txtfile.write("=" * 80 + "\n\n")
+                
+
+                stats = session_data.get('session_statistics', {})
+                txtfile.write("SESSION STATISTICS:\n")
+                txtfile.write(f"Total Queries: {stats.get('total_queries', 0)}\n")
+                txtfile.write(f"Successful Queries: {stats.get('successful_queries', 0)}\n")
+                txtfile.write(f"Failed Queries: {stats.get('failed_queries', 0)}\n")
+                txtfile.write(f"Success Rate: {stats.get('success_rate', 0):.1f}%\n")
+                txtfile.write(f"Total Results: {stats.get('total_results_returned', 0)}\n\n")
+                
+
+                txtfile.write("CONVERSATION HISTORY:\n")
+                txtfile.write("-" * 80 + "\n\n")
+                
+                for i, response in enumerate(session_data.get('responses', []), 1):
+                    query_metadata = response.get('query_metadata', {})
+                    response_data = response.get('response', {})
+                    
+                    txtfile.write(f"QUERY {i}:\n")
+                    txtfile.write(f"Time: {query_metadata.get('timestamp', '')}\n")
+                    txtfile.write(f"Question: {query_metadata.get('original_query', '')}\n")
+                    txtfile.write(f"Success: {response_data.get('success', False)}\n")
+                    txtfile.write(f"Answer: {response_data.get('message', '')}\n")
+                    
+                    if response_data.get('sql_generated'):
+                        txtfile.write(f"SQL: {response_data.get('sql_generated')}\n")
+                    
+                    if response_data.get('result_count'):
+                        txtfile.write(f"Results: {response_data.get('result_count')} records\n")
+                    
+                    txtfile.write("\n" + "-" * 40 + "\n\n")
+            
+            logger.info(f"Session exported to TXT: {filepath}")
+            return str(filepath)
+            
+        except Exception as e:
+            logger.error(f"Error exporting to TXT: {e}")
+            return None
+    
+    def _classify_query_type(self, query: str) -> str:
+        """Classify query type for analysis"""
+        query_lower = query.lower()
         
-        if result_count > 3:
-            print(f"\n   ... and {result_count - 3} more records")
+        if any(word in query_lower for word in ['count', 'how many', 'total', 'number']):
+            return "count"
+        elif any(word in query_lower for word in ['show', 'list', 'find', 'get', 'display']):
+            return "retrieval"
+        elif any(word in query_lower for word in ['compare', 'difference', 'versus']):
+            return "comparison"
+        elif any(word in query_lower for word in ['update', 'change', 'modify']):
+            return "modification"
+        else:
+            return "general"
     
-    # Metadata highlights
-    metadata = response.get("metadata", {})
-    if metadata:
-        print(f"\n🔍 METADATA:")
-        for key, value in metadata.items():
-            if key in ["processing_time_seconds", "query_type", "tables_used"]:
-                print(f"   {key}: {value}")
+    def _analyze_query_types(self, session_responses: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Analyze query types in session"""
+        query_types = {}
+        
+        for response in session_responses:
+            query_metadata = response.get('query_metadata', {})
+            original_query = query_metadata.get('original_query', '')
+            query_type = self._classify_query_type(original_query)
+            
+            query_types[query_type] = query_types.get(query_type, 0) + 1
+        
+        return query_types
     
-    # JSON structure info
-    if response.get("structured_response"):
-        print(f"\n📋 STRUCTURED RESPONSE: Available in JSON file")
+    def _analyze_daily_query_types(self, daily_responses: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Analyze query types for daily summary"""
+        query_types = {}
+        
+        for response in daily_responses:
+            query_type = response.get('query_info', {}).get('query_type', 'unknown')
+            query_types[query_type] = query_types.get(query_type, 0) + 1
+        
+        return query_types
     
-    # System info
-    print(f"\n⚡ Powered by: {response.get('powered_by', agent_type)}")
-    print("="*70)
+    def _find_most_common_agent(self, session_responses: List[Dict[str, Any]]) -> str:
+        """Find most commonly used agent type"""
+        agent_counts = {}
+        
+        for response in session_responses:
+            agent_type = response.get('response', {}).get('metadata', {}).get('agent_type', 'unknown')
+            agent_counts[agent_type] = agent_counts.get(agent_type, 0) + 1
+        
+        if agent_counts:
+            return max(agent_counts, key=agent_counts.get)
+        return "unknown"
+    
+    def _calculate_average_processing_time(self, session_responses: List[Dict[str, Any]]) -> float:
+        """Calculate average processing time"""
+        processing_times = []
+        
+        for response in session_responses:
+            processing_time = response.get('query_metadata', {}).get('processing_time_seconds')
+            if processing_time and isinstance(processing_time, (int, float)):
+                processing_times.append(processing_time)
+        
+        if processing_times:
+            return sum(processing_times) / len(processing_times)
+        return 0.0
+    
+    def _calculate_session_duration(self, session_responses: List[Dict[str, Any]]) -> str:
+        """Calculate total session duration"""
+        if not session_responses:
+            return "0 minutes"
+        
+        try:
+            first_timestamp = session_responses[0].get('query_metadata', {}).get('timestamp', '')
+            last_timestamp = session_responses[-1].get('query_metadata', {}).get('timestamp', '')
+            
+            if first_timestamp and last_timestamp:
+                from datetime import datetime
+                first_time = datetime.fromisoformat(first_timestamp.replace('Z', '+00:00'))
+                last_time = datetime.fromisoformat(last_timestamp.replace('Z', '+00:00'))
+                
+                duration = last_time - first_time
+                minutes = int(duration.total_seconds() / 60)
+                return f"{minutes} minutes"
+        except Exception:
+            pass
+        
+        return "unknown"
+    
+    def _find_most_active_hour(self, daily_responses: List[Dict[str, Any]]) -> str:
+        """Find most active hour of the day"""
+        hour_counts = {}
+        
+        for response in daily_responses:
+            saved_at = response.get('metadata', {}).get('saved_at', '')
+            if saved_at:
+                try:
+                    hour = datetime.fromisoformat(saved_at.replace('Z', '+00:00')).hour
+                    hour_counts[hour] = hour_counts.get(hour, 0) + 1
+                except Exception:
+                    continue
+        
+        if hour_counts:
+            most_active_hour = max(hour_counts, key=hour_counts.get)
+            return f"{most_active_hour:02d}:00"
+        return "unknown"
+    
+    def _calculate_average_query_length(self, daily_responses: List[Dict[str, Any]]) -> float:
+        """Calculate average query length"""
+        query_lengths = []
+        
+        for response in daily_responses:
+            query_length = response.get('query_info', {}).get('query_length', 0)
+            if query_length > 0:
+                query_lengths.append(query_length)
+        
+        if query_lengths:
+            return sum(query_lengths) / len(query_lengths)
+        return 0.0
+    
+    def get_storage_stats(self) -> Dict[str, Any]:
+        """Get storage statistics"""
+        try:
+            response_files = list(self.responses_dir.glob("*.json"))
+            session_files = list(self.sessions_dir.glob("*.json"))
+            daily_files = list(self.daily_dir.glob("*.json"))
+            export_files = list(self.exports_dir.glob("*"))
+            
 
-def print_help_with_json():
-    """Display help information including JSON features"""
-    print("\n" + "="*60)
-    print("📖 HELP - HEALTHCARE DATABASE ASSISTANT WITH JSON SAVING")
-    print("="*60)
+            total_size = 0
+            for file_list in [response_files, session_files, daily_files, export_files]:
+                for file in file_list:
+                    try:
+                        total_size += file.stat().st_size
+                    except Exception:
+                        pass
+            
+            return {
+                "storage_location": str(self.base_dir),
+                "file_counts": {
+                    "response_files": len(response_files),
+                    "session_files": len(session_files),
+                    "daily_files": len(daily_files),
+                    "export_files": len(export_files),
+                    "total_files": len(response_files) + len(session_files) + len(daily_files) + len(export_files)
+                },
+                "storage_size": {
+                    "total_bytes": total_size,
+                    "total_mb": round(total_size / (1024 * 1024), 2)
+                },
+                "directories": {
+                    "responses": str(self.responses_dir),
+                    "sessions": str(self.sessions_dir),
+                    "daily": str(self.daily_dir),
+                    "exports": str(self.exports_dir)
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error getting storage stats: {e}")
+            return {"error": str(e)}
     
-    print("\n💬 HOW TO ASK QUESTIONS:")
-    print("   • Use natural language - no need to know SQL!")
-    print("   • Ask about patients, conditions, medications, procedures")
-    print("   • Be specific about what you want to know")
-    
-    print("\n🏥 HEALTHCARE DATA AVAILABLE:")
-    print("   • PATIENTS: Demographics, personal information")
-    print("   • CONDITIONS: Medical diagnoses and diseases")
-    print("   • MEDICATIONS: Prescriptions and treatments")
-    print("   • PROCEDURES: Medical procedures and surgeries")
-    print("   • ENCOUNTERS: Doctor visits and hospital stays")
-    print("   • PROVIDERS: Doctors and healthcare professionals")
-    
-    print("\n💾 JSON SAVING FEATURES:")
-    print("   • Each query response saved as individual JSON file")
-    print("   • Session summary saved when you exit")
-    print("   • Files saved in 'json_responses/' folder")
-    print("   • Includes metadata: timestamps, processing time, session info")
-    print("   • Searchable and machine-readable format")
-    
-    print("\n⌨️  COMMANDS:")
-    print("   • 'help' - Show this help")
-    print("   • 'save-session' - Manually save session summary")
-    print("   • 'show-files' - Show saved JSON files")
-    print("   • 'exit' or 'quit' - End session (auto-saves summary)")
+    def cleanup_old_files(self, days_to_keep: int = 30) -> Dict[str, int]:
+        """Clean up old files beyond retention period"""
+        try:
+            from datetime import datetime, timedelta
+            
+            cutoff_date = datetime.now() - timedelta(days=days_to_keep)
+            cleanup_stats = {"deleted_files": 0, "kept_files": 0, "errors": 0}
+            
 
-def show_saved_files():
-    """Show information about saved JSON files"""
-    json_dir = "json_responses"
-    
-    if not os.path.exists(json_dir):
-        print("📁 No JSON files saved yet")
-        return
-    
-    files = [f for f in os.listdir(json_dir) if f.endswith('.json')]
-    
-    if not files:
-        print("📁 No JSON files found")
-        return
-    
-    print(f"\n📁 SAVED JSON FILES ({len(files)} files):")
-    print("-" * 50)
-    
-    # Sort by modification time (newest first)
-    files_with_time = [(f, os.path.getmtime(os.path.join(json_dir, f))) for f in files]
-    files_with_time.sort(key=lambda x: x[1], reverse=True)
-    
-    for i, (filename, mtime) in enumerate(files_with_time[:10], 1):  # Show latest 10
-        file_time = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
-        file_size = os.path.getsize(os.path.join(json_dir, filename))
-        print(f"   {i:2d}. {filename}")
-        print(f"       Created: {file_time} | Size: {file_size} bytes")
-    
-    if len(files) > 10:
-        print(f"   ... and {len(files) - 10} more files")
-    
-    print(f"\n📂 Location: {os.path.abspath(json_dir)}")
+            for file in self.responses_dir.glob("*.json"):
+                try:
+                    file_time = datetime.fromtimestamp(file.stat().st_mtime)
+                    if file_time < cutoff_date:
+                        file.unlink()
+                        cleanup_stats["deleted_files"] += 1
+                        logger.debug(f"Deleted old response file: {file}")
+                    else:
+                        cleanup_stats["kept_files"] += 1
+                except Exception as e:
+                    cleanup_stats["errors"] += 1
+                    logger.warning(f"Error cleaning up file {file}: {e}")
+            
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "test":
-        # Test mode - could add JSON saving test here
-        print("🧪 Testing connections...")
-        asyncio.run(enhanced_database_cli_with_json())
-    else:
-        asyncio.run(enhanced_database_cli_with_json())
+            session_cutoff = datetime.now() - timedelta(days=days_to_keep * 2)
+            for file in self.sessions_dir.glob("*.json"):
+                try:
+                    file_time = datetime.fromtimestamp(file.stat().st_mtime)
+                    if file_time < session_cutoff:
+                        file.unlink()
+                        cleanup_stats["deleted_files"] += 1
+                        logger.debug(f"Deleted old session file: {file}")
+                    else:
+                        cleanup_stats["kept_files"] += 1
+                except Exception as e:
+                    cleanup_stats["errors"] += 1
+                    logger.warning(f"Error cleaning up file {file}: {e}")
+            
+            logger.info(f"Cleanup completed: {cleanup_stats}")
+            return cleanup_stats
+            
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
+            return {"error": str(e)}
+    
+    def search_responses(self, search_term: str, max_results: int = 10) -> List[Dict[str, Any]]:
+        """Search through saved responses"""
+        try:
+            search_results = []
+            search_term_lower = search_term.lower()
+            
+            for response_file in self.responses_dir.glob("*.json"):
+                try:
+                    with open(response_file, 'r', encoding='utf-8') as f:
+                        response_data = json.load(f)
+                    
+
+                    user_query = response_data.get('query_info', {}).get('original_query', '')
+                    response_message = response_data.get('response_data', {}).get('message', '')
+                    
+                    if (search_term_lower in user_query.lower() or 
+                        search_term_lower in response_message.lower()):
+                        
+                        search_results.append({
+                            "file": str(response_file),
+                            "timestamp": response_data.get('metadata', {}).get('saved_at', ''),
+                            "user_query": user_query,
+                            "response_message": response_message[:200] + "..." if len(response_message) > 200 else response_message,
+                            "success": response_data.get('response_data', {}).get('success', False),
+                            "session_id": response_data.get('metadata', {}).get('session_id', '')
+                        })
+                        
+                        if len(search_results) >= max_results:
+                            break
+                            
+                except Exception as e:
+                    logger.warning(f"Error reading response file {response_file}: {e}")
+            
+
+            search_results.sort(key=lambda x: x['timestamp'], reverse=True)
+            
+            return search_results
+            
+        except Exception as e:
+            logger.error(f"Error searching responses: {e}")
+            return []

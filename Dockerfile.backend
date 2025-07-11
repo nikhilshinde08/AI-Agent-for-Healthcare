@@ -1,0 +1,24 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/ ./src/
+COPY main.py .
+COPY api_server.py .
+COPY .env.example .env
+
+RUN mkdir -p api_storage/requests api_storage/responses api_storage/cache api_storage/analytics
+RUN mkdir -p conversation_memory json_responses logs
+
+EXPOSE 8002
+
+CMD ["python", "api_server.py"]

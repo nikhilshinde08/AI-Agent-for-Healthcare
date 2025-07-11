@@ -13,32 +13,32 @@ class ConversationMemory:
     and archives sessions in a 'sessions' folder.
     """
     
-    # Class-level storage for current session
+
     _current_session = None
     _lock = threading.Lock()
     _auto_save_registered = False
     
     def __init__(self, session_id=None, force_new_session=True):
         """Initialize a new conversation memory session"""
-        # Create a new session ID if forced or none provided
+
         if session_id and not force_new_session:
             self.session_id = session_id
         else:
             self.session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
         
-        # Ensure sessions folder exists
+
         self.sessions_folder = Path("sessions")
         self.sessions_folder.mkdir(exist_ok=True)
         
         with ConversationMemory._lock:
-            # Start with a fresh session
+
             ConversationMemory._current_session = {
                 "session_id": self.session_id,
                 "data": self._create_empty_session()
             }
             print(f"Created fresh session: {self.session_id}")
             
-            # Register cleanup on exit if not already done
+
             if not ConversationMemory._auto_save_registered:
                 atexit.register(ConversationMemory._cleanup_on_exit)
                 ConversationMemory._auto_save_registered = True
@@ -62,13 +62,18 @@ class ConversationMemory:
     
     def save_session_to_file(self):
         """Save the current session to a JSON file in sessions/"""
-        with ConversationMemory._lock:
-            session_data = ConversationMemory._current_session
-            if session_data:
-                file_path = self.sessions_folder / f"{self.session_id}.json"
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(session_data, f, indent=2, default=str)
-                print(f"Session saved to {file_path}")
+        try:
+            with ConversationMemory._lock:
+                session_data = ConversationMemory._current_session
+                if session_data:
+                    file_path = self.sessions_folder / f"{self.session_id}.json"
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(session_data, f, indent=2, default=str)
+                    print(f"Session saved to {file_path}")
+                else:
+                    print("⚠️ No session data to save")
+        except Exception as e:
+            print(f"❌ Error saving session: {e}")
     
     @classmethod
     def _cleanup_on_exit(cls):
@@ -97,7 +102,7 @@ class ConversationMemory:
             if ConversationMemory._current_session:
                 update_func(ConversationMemory._current_session["data"])
             else:
-                # Session was cleared, reinitialize
+
                 ConversationMemory._current_session = {
                     "session_id": self.session_id,
                     "data": self._create_empty_session()
@@ -106,10 +111,10 @@ class ConversationMemory:
     
     def add_interaction(self, user_query, agent_response):
         """Add a new interaction to memory"""
-        # Determine if response contains natural language
+
         has_natural_language = self._has_natural_language_response(agent_response)
         
-        # Extract patient context from the current query
+
         patient_context = self._extract_patient_context(user_query)
         
         def update_session(session_data):
@@ -129,15 +134,15 @@ class ConversationMemory:
                 "patient_context": patient_context
             }
             
-            # Add to conversation history
+
             session_data["conversation_history"].append(interaction)
             
-            # Update current context with patient information
+
             if patient_context:
                 session_data["current_context"].update(patient_context)
                 session_data["last_patient_query"] = user_query
             
-            # Update session statistics
+
             session_data["last_updated"] = datetime.now().isoformat()
             session_data["total_interactions"] += 1
             
@@ -158,7 +163,7 @@ class ConversationMemory:
         context = {}
         query_lower = user_query.lower()
         
-        # Look for patient names (basic pattern matching)
+
         name_patterns = [
             r'\b([A-Z][a-z]+)\s+(?:patient|records?|data|information)\b',
             r'\bpatient\s+([A-Z][a-z]+)\b',
@@ -172,7 +177,7 @@ class ConversationMemory:
                 context["mentioned_patient"] = match.group(1)
                 break
         
-        # Look for specific query types
+
         if any(word in query_lower for word in ['medication', 'drug', 'prescription']):
             context["query_focus"] = "medication"
         elif any(word in query_lower for word in ['condition', 'diagnosis', 'disease']):
@@ -189,12 +194,11 @@ class ConversationMemory:
         
         recent_interactions = memory_data["conversation_history"][-last_n_interactions:]
         
-        # Build context with focus on current session
         context = "## Current Session Context:\n"
         context += f"Session ID: {self.session_id}\n"
         context += f"Total interactions: {memory_data['total_interactions']}\n"
         
-        # Add current patient context if any
+
         current_context = memory_data.get("current_context", {})
         if current_context.get("mentioned_patient"):
             context += f"**Current Patient Focus:** {current_context['mentioned_patient']}\n"
@@ -229,13 +233,13 @@ class ConversationMemory:
         if not answer or len(answer.strip()) < 10:
             return False
             
-        # Check for indicators of natural language vs raw data
+
         natural_indicators = [
             "there are", "found", "shows", "indicates", "based on", 
             "according to", "the data shows", "results show"
         ]
         
-        # Check for natural language indicators
+
         answer_lower = answer.lower()
         has_natural_words = any(indicator in answer_lower for indicator in natural_indicators)
         
@@ -279,12 +283,12 @@ class ConversationMemory:
             "memory_location": "in_memory_with_file_backup"
         }
 
-# Example usage
+
 if __name__ == "__main__":
-    # Create a new conversation memory instance
+
     memory = ConversationMemory()
     
-    # Add a sample interaction
+
     memory.add_interaction(
         "Show me John's medical records",
         {
@@ -299,13 +303,13 @@ if __name__ == "__main__":
         }
     )
     
-    # Get conversation context
+
     context = memory.get_conversation_context()
     print(context)
     
-    # Save the session to file
+
     memory.save_session_to_file()
     
-    # Get session status
+
     status = memory.get_session_status()
     print(f"Session status: {status}")

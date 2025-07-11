@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: healthcare-assistant-backend
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://healthcareuser:healthcarepass@db:5432/healthcare_db
+    volumes:
+      - ./api_storage:/app/api_storage
+      - ./conversation_memory:/app/conversation_memory
+      - ./json_responses:/app/json_responses
+      - ./logs:/app/logs
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - healthcare-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: healthcare-assistant-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - healthcare-network
+
+  db:
+    image: postgres:15-alpine
+    container_name: healthcare-assistant-db
+    environment:
+      - POSTGRES_DB=healthcare_db
+      - POSTGRES_USER=healthcareuser
+      - POSTGRES_PASSWORD=healthcarepass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - healthcare-network
+
+volumes:
+  postgres_data:
+
+networks:
+  healthcare-network:
+    driver: bridge

@@ -1,15 +1,31 @@
-# src/utils/json_validator.py
+"""JSON validation and correction utilities for healthcare database responses."""
+
 from typing import Any, Dict, List, Optional, Union
 from pydantic import ValidationError
 import json
 import re
 
+
 class JSONResponseValidator:
-    """Enhanced JSON validation and correction utilities"""
+    """Enhanced JSON validation and correction utilities for healthcare database responses.
+    
+    This class provides methods to validate, parse, and fix malformed JSON responses
+    from database agents, ensuring consistent response formatting.
+    """
     
     @staticmethod
     def validate_and_fix_json(response_text: str) -> Dict[str, Any]:
-        """Validate and attempt to fix malformed JSON responses"""
+        """Validate and attempt to fix malformed JSON responses.
+        
+        Args:
+            response_text: Raw text response that may contain JSON
+            
+        Returns:
+            Dictionary containing parsed JSON or constructed response
+            
+        Raises:
+            None: Always returns a valid dictionary, constructs one if parsing fails
+        """
         
         cleaned_text = response_text.strip()
         if cleaned_text.startswith('{') and cleaned_text.endswith('}'):
@@ -39,7 +55,17 @@ class JSONResponseValidator:
     
     @staticmethod
     def _construct_from_text(text: str) -> Dict[str, Any]:
-        """Construct JSON structure from unstructured text"""
+        """Construct JSON structure from unstructured text.
+        
+        When JSON parsing fails, this method analyzes the text content
+        to construct a valid response dictionary with inferred values.
+        
+        Args:
+            text: Unstructured text response
+            
+        Returns:
+            Dictionary with standard response structure
+        """
         result = {
             "success": False,
             "message": "Unable to parse structured response",

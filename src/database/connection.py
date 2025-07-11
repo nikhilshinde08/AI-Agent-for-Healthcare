@@ -1,27 +1,40 @@
-# src/database/connection.py - Optimized for ReAct agent
 import os
 import asyncio
 import json
+import logging
 from typing import Dict, Any, Optional, Tuple, List
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 from sqlalchemy.engine import URL
-import structlog
 from dotenv import load_dotenv
+
+try:
+    import structlog
+    logger = structlog.get_logger(__name__)
+except ImportError:
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
 
 
 load_dotenv()
 
-_required_env_vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
-_missing = [var for var in _required_env_vars if not os.getenv(var)]
-if _missing:
-    raise EnvironmentError(
-        f"Missing required environment variables: {', '.join(_missing)}"
-    )
+def _validate_env_vars():
+    """Validate required environment variables."""
+    required_vars = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"]
+    missing = [var for var in required_vars if not os.getenv(var)]
+    if missing:
+        raise EnvironmentError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
+    return True
 
-logger = structlog.get_logger(__name__)
+try:
+    _validate_env_vars()
+except EnvironmentError as e:
+    logger.error(f"Environment validation failed: {e}")
+    raise
 
 class DatabaseConnection:
     """Enhanced PostgreSQL connection optimized for ReAct agent with schema management"""
@@ -179,7 +192,6 @@ class DatabaseConnection:
                 except Exception as fk_error:
                     logger.warning(f"Could not extract foreign keys: {fk_error}")
                 
-                # Cache for ReAct agent
                 self.schema_cache = schema
                 logger.info(
                     f"✅ Schema extracted for ReAct agent: "
@@ -194,17 +206,17 @@ class DatabaseConnection:
     async def execute_query(self, sql_query: str) -> Tuple[bool, Any, Optional[str], int]:
         """Execute SQL query optimized for ReAct agent responses"""
         try:
-            logger.info(f"🔧 Executing ReAct agent query: {sql_query}")
+            sanitized_query = self._sanitize_query(sql_query)
+            logger.info(f"🔧 Executing ReAct agent query: {sanitized_query[:100]}...")
+            
             async with self.async_session() as session:
                 await session.execute(text("SET statement_timeout = '30s'"))
-                result = await session.execute(text(sql_query))
+                result = await session.execute(text(sanitized_query))
                 rows = result.fetchall()
                 cols = result.keys()
                 
-                # Convert to dict format for JSON serialization
                 data = [dict(zip(cols, row)) for row in rows] if rows else []
                 
-                # Limit results for ReAct agent
                 if len(data) > 1000:
                     data = data[:1000]
                     logger.warning("⚠️ Result truncated to 1000 rows for ReAct agent")
@@ -217,6 +229,23 @@ class DatabaseConnection:
             status = self._map_db_error_to_status(e)
             logger.error(f"❌ ReAct agent query failed ({status}): {error}")
             return False, None, error, status
+    
+    def _sanitize_query(self, query: str) -> str:
+        """Basic SQL query sanitization"""
+        import re
+        
+        dangerous_keywords = [
+            r'\bDROP\s+TABLE\b', r'\bDELETE\s+FROM\b', r'\bUPDATE\s+.*\s+SET\b',
+            r'\bINSERT\s+INTO\b', r'\bCREATE\s+TABLE\b', r'\bALTER\s+TABLE\b',
+            r'\bTRUNCATE\s+TABLE\b', r'\bGRANT\b', r'\bREVOKE\b'
+        ]
+        
+        query_upper = query.upper()
+        for pattern in dangerous_keywords:
+            if re.search(pattern, query_upper):
+                raise ValueError(f"Query contains potentially dangerous operation: {pattern}")
+        
+        return query.strip()
     
     def _map_db_error_to_status(self, exception: Exception) -> int:
         """Map database errors to HTTP-like status codes for ReAct agent"""
